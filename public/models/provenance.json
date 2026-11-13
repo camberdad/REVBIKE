@@ -1,0 +1,9 @@
+{
+  "source": "User-supplied cgbike1.obj / cgbike1.fbx",
+  "originalTriangles": 1373840,
+  "finalTriangles": 117861,
+  "skippedObjects": 21,
+  "drawCalls": 60,
+  "bytes": 2256348,
+  "note": "Materials recovered from matching FBX. Floor and micro-lettering removed. Meshes simplified, batched by material, reoriented and split into independently animated chassis and wheels."
+}

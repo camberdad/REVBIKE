@@ -1,0 +1,28 @@
+{
+  "name": "Redrock Ridge",
+  "subtitle": "THE DESERT DOESN’T DO SECOND CHANCES.",
+  "length": 195,
+  "stars": [32, 45, 65],
+  "spawn": [2, 1.15],
+  "segments": [
+    { "points": [[-18,0],[12,0],[17,0.3],[21,1.8],[25,4.2]], "smooth": true },
+    { "points": [[31,1],[36,0],[43,0],[47,1],[51,3.4],[54,5.6]], "smooth": true },
+    { "points": [[62,1.6],[68,0],[80,0],[90,0]], "smooth": true },
+    { "points": [[90,0],[112,0],[117,1.2],[121,3.8]], "smooth": true },
+    { "points": [[130,1],[135,0],[144,0],[148,2],[151,3.3]], "smooth": true },
+    { "points": [[155,-0.3],[160,0],[166,0],[178,0],[181,1.1],[185,1.1],[189,0],[209,0]], "smooth": true }
+  ],
+  "loop": { "x": 90, "y": 5.5, "radius": 5.5 },
+  "hazards": [
+    { "type": "spikes", "x": 28, "y": -1.9, "width": 5.8 },
+    { "type": "tnt", "x": 33, "y": 1.15 },
+    { "type": "spikes", "x": 58, "y": -1.6, "width": 7.5 },
+    { "type": "saw", "x": 72, "y": 3.6, "radius": 1.05 },
+    { "type": "spikes", "x": 125, "y": -1.9, "width": 7.7 },
+    { "type": "tnt", "x": 125, "y": -0.6 },
+    { "type": "saw", "x": 154, "y": -0.6, "radius": 0.85 },
+    { "type": "tnt", "x": 153, "y": -0.8 }
+  ],
+  "checkpoints": [[35,0.2],[68,0.2],[106,0.2],[165,0.2]],
+  "finish": [195,0]
+}

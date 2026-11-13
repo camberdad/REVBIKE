@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { LoadingManager, Texture } from 'three';
+const manager=new LoadingManager();
+manager.addHandler(/.*/, {path:'',setPath(p){this.path=p;return this;},load(){return new Texture();}});
+globalThis.window={URL,innerWidth:1000,innerHeight:700};
+const buffer=fs.readFileSync(process.argv[2]);
+const model=new FBXLoader(manager).parse(buffer.buffer.slice(buffer.byteOffset,buffer.byteOffset+buffer.byteLength),'');
+const materials={};
+model.traverse(obj=>{if(obj.isMesh)for(const mat of Array.isArray(obj.material)?obj.material:[obj.material])materials[mat.name]={color:mat.color.getHexString(),map:mat.map?.name};});
+fs.mkdirSync('artifacts',{recursive:true});fs.writeFileSync('artifacts/model-materials.json',JSON.stringify(materials,null,2));
+console.log(JSON.stringify(materials,null,2));

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.sites/
+.sites-runtime/
+.sites-checkout/
+.pnpm-store/
+artifacts/
+*.log
+.openai/
