@@ -380,7 +380,7 @@ export class GameRenderer {
   resize(){
     const rect=this.canvas.parentElement!.getBoundingClientRect();this.width=rect.width;this.height=rect.height;
     this.renderer.setSize(this.width,this.height,false);
-    const aspect=this.width/this.height,viewHeight=aspect<1.1?20:16.8;
+    const aspect=this.width/this.height,viewHeight=aspect<1.1?16:13.5;
     this.camera.left=-viewHeight*aspect/2;this.camera.right=viewHeight*aspect/2;this.camera.top=viewHeight/2;this.camera.bottom=-viewHeight/2;this.camera.updateProjectionMatrix();
   }
 

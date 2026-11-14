@@ -37,7 +37,7 @@ $('app').innerHTML=`
       <div class="game-toolbar">
         <div class="level-info"><span class="level-number">01</span><div><div class="level-kicker">THE FIRST RIDE <span class="difficulty">ROOKIE</span></div><h1>${level.name}</h1></div></div>
         <div class="timer-wrap"><div class="timer-label">RUN TIME <span id="timer-state">READY WHEN YOU ARE</span></div><div class="timer-row"><span id="timer" class="timer">00:00<span>.00</span></span><div id="live-stars" class="live-stars">${star.repeat(3)}</div></div></div>
-        <div class="toolbar-actions"><button id="restart" class="icon-button" aria-label="Restart round (R)" title="Restart round · R">${icon('restart')}</button><button id="pause" class="icon-button" aria-label="Pause (P)" title="Pause · P">${icon('pause')}</button><span class="toolbar-divider"></span><button id="sound" class="icon-button" aria-label="Enable sound" title="Enable sound">${icon('mute')}</button><button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" title="Fullscreen">${icon('fullscreen')}</button></div>
+        <div class="toolbar-actions"><button id="restart" class="icon-button" aria-label="Restart round (R)" title="Restart round · R">${icon('restart')}</button><button id="pause" class="icon-button" aria-label="Pause (P)" title="Pause · P">${icon('pause')}</button><button id="menu" class="icon-button" aria-label="Open settings and guide" title="Settings & guide">${icon('settings')}</button><span class="toolbar-divider"></span><button id="sound" class="icon-button" aria-label="Enable sound" title="Enable sound">${icon('mute')}</button><button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" title="Fullscreen">${icon('fullscreen')}</button></div>
       </div>
       <div id="stage" class="stage">
         <canvas id="game" tabindex="0" aria-label="Dirtbike course. Use W or Up to accelerate, S or Down to brake, A and D to lean. R restarts the round from the beginning."></canvas>
@@ -58,7 +58,7 @@ $('app').innerHTML=`
           <span class="intro-kicker"><span></span> YOUR NEXT BAD IDEA STARTS HERE.</span>
           <h2 class="intro-logo" aria-label="REVBIKE"><span class="wordmark">${logo}</span></h2>
           <p>Find your balance. Send the gaps.<br>Stick the landing. Chase three stars.</p>
-          <button id="start" class="primary-button">LET’S RIDE ${icon('arrow')}</button><span class="enter-hint">or press <kbd>ENTER</kbd></span>
+          <div class="home-menu"><button id="start" class="primary-button">LET’S RIDE ${icon('arrow')}</button><button id="home-settings" class="menu-button">${icon('settings')} SETTINGS</button><button id="home-how" class="menu-button">${icon('help')} HOW TO RIDE</button></div><span class="enter-hint">PRESS ENTER TO RIDE</span>
         </div>
         <div id="riding-hint" class="riding-hint hidden"><kbd>W</kbd> THROTTLE <span>·</span> <kbd>A</kbd><kbd>D</kbd> FIND YOUR BALANCE</div>
         <div class="stage-bottom"><div class="scene-caption"><span class="crosshair">+</span> <span>NO ROAD. NO RULES.<br><b>JUST YOU & GRAVITY.</b></span></div><div class="speed-readout"><span id="speed">00</span><small>KM/H</small><i></i><span class="gear-label">DIRT<br><b>MODE</b></span></div></div>
@@ -67,7 +67,7 @@ $('app').innerHTML=`
         <div id="loading" class="loading"><span class="brand-symbol"><i></i><i></i><i></i></span><b>WARMING UP THE ENGINE</b><span id="loading-status">Building a little trouble…</span></div>
       </div>
       <div class="game-bottom-bar"><span><span class="green-dot"></span><b id="run-status">ALL SYSTEMS GO</b></span><span id="checkpoint-status">CHECKPOINT 00 / ${String(level.checkpoints.length).padStart(2,'0')}</span><span>FLIPS SHAVE TIME. <b>−0.5s / FLIP</b> ${icon('arrow')}</span></div>
-      <div class="bottom-tabs-row"><div class="bottom-tabs" role="tablist" aria-label="Game guide and preferences"><button id="tab-how" role="tab" aria-selected="true" aria-controls="panel-how">${icon('help')} HOW TO RIDE</button><button id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" tabindex="-1">${icon('settings')} GAMEPLAY SETTINGS</button></div><button id="resume-panel" class="resume-panel hidden">RESUME RIDE ${icon('play')}</button></div>
+      <div id="menu-overlay" class="menu-overlay hidden"><div class="menu-card" role="dialog" aria-modal="true" aria-label="Ride guide and settings"><div class="menu-card-heading"><span class="eyebrow">REVBIKE / PIT STOP</span><button id="menu-back" class="menu-back">← BACK</button></div><div class="bottom-tabs-row"><div class="bottom-tabs" role="tablist" aria-label="Game guide and preferences"><button id="tab-how" role="tab" aria-selected="true" aria-controls="panel-how">${icon('help')} HOW TO RIDE</button><button id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" tabindex="-1">${icon('settings')} GAMEPLAY SETTINGS</button></div><button id="resume-panel" class="resume-panel hidden">RESUME RIDE ${icon('play')}</button></div>
       <section id="panel-how" class="bottom-panel" role="tabpanel" aria-labelledby="tab-how" tabindex="0">
         <div class="controls-guide"><div class="control-item"><span class="key-pair"><kbd>W</kbd><small>↑</small></span><span>THROTTLE<small>Give it some.</small></span></div><div class="control-item"><span class="key-pair"><kbd>S</kbd><small>↓</small></span><span>BRAKE / REVERSE<small>Keep it in check.</small></span></div><div class="control-item"><span class="key-pair double"><kbd>A</kbd><kbd>D</kbd></span><span>LEAN / FLIP<small>Own the airtime.</small></span></div><div class="control-item"><kbd>R</kbd><span>RESTART ROUND<small>Back to the beginning.</small></span></div><div class="control-item"><kbd>P</kbd><span>PAUSE<small>Take a breather.</small></span></div></div>
         <div class="guide-note"><span>Keep your helmet clear. Land full flips for <b>−0.5s each.</b> R resets the bike, timer, bonuses, hazards, and progress.</span><div class="star-targets">${level.stars.map((t,i)=>`<div class="star-target"><span>${star.repeat(3-i)}</span><b>&lt; ${t}s</b></div>`).join('')}</div></div>
@@ -80,6 +80,7 @@ $('app').innerHTML=`
           <label class="setting-field shake-field" for="setting-shake"><span>SCREEN SHAKE</span><span class="setting-toggle"><input id="setting-shake" type="checkbox"><span>Crash & explosion shake</span></span><small>Turn off for a steadier camera.</small></label>
         </div><div class="settings-footnote"><span id="settings-saved" role="status">Preferences save automatically on this browser.</span><div class="settings-utilities"><button id="toggle-rig-debug" class="text-button" aria-pressed="false">SHOW RIG DEBUG</button><button id="reset-settings" class="text-button">RESTORE DEFAULTS</button></div></div>
       </section>
+      </div></div>
     </section>
     <footer><span>GOOD RUNS ARE EARNED. GREAT RUNS ARE SENT.</span><span>REVBIKE <b>/</b> 01 — REDROCK RIDGE</span></footer>
   </main>`;
@@ -105,9 +106,9 @@ function modal(kicker:string,title:string,content:string,primary:string,primaryF
   modalPrimary=primaryFn;modalSecondary=secondaryFn;$('modal').classList.remove('hidden');$('modal-primary').focus();
 }
 function hideModal(){$('modal').classList.add('hidden');$('game').focus({preventScroll:true});}
-function start(){if(!sim)return;state='playing';panelPaused=false;$('resume-panel').classList.add('hidden');hideModal();$('intro').classList.add('hidden');$('riding-hint').classList.remove('hidden');$('timer-state').textContent='MAKE IT COUNT';$('run-status').textContent='RUN IN PROGRESS';$('game').focus({preventScroll:true});}
+function start(){if(!sim)return;closeMenu(false);state='playing';panelPaused=false;$('resume-panel').classList.add('hidden');hideModal();$('intro').classList.add('hidden');$('riding-hint').classList.remove('hidden');$('timer-state').textContent='MAKE IT COUNT';$('run-status').textContent='RUN IN PROGRESS';$('game').focus({preventScroll:true});}
 function restart(){
-  if(!sim)return;clearControls();hideModal();
+  if(!sim)return;closeMenu(false);clearControls();hideModal();
   elapsed=0;bonus=0;checkpoint=-1;activeFlips=0;steps=0;
   panelPaused=false;$('resume-panel').classList.add('hidden');sim.restartRound();view.reset();
   state='playing';crashElapsed=0;$('intro').classList.add('hidden');$('riding-hint').classList.remove('hidden');
@@ -115,6 +116,7 @@ function restart(){
   toast('FRESH ROUND. BACK TO THE START.');
 }
 function pause(){
+  if(!$('menu-overlay').classList.contains('hidden')){closeMenu();return;}
   if(panelPaused){resumePanel();return;}
   if(state==='finished'||state==='crashed')return;
   if(state==='paused'){state=previousState;hideModal();return;}
@@ -122,11 +124,20 @@ function pause(){
   modal('TAKE A BREATHER','HOLD THAT THOUGHT.', '<p>The dirt will still be here.<br>Your timer is paused.</p>','KEEP RIDING',()=>pause(),'RESTART ROUND',restart);
 }
 function resumePanel(){
+  $('menu-overlay').classList.add('hidden');
   if(!panelPaused)return;
   panelPaused=false;state=previousState;$('resume-panel').classList.add('hidden');$('game').focus({preventScroll:true});
   $('run-status').textContent='RUN IN PROGRESS';
 }
-function selectBottomTab(selected:'how'|'settings'){
+function closeMenu(resume=true){
+  $('menu-overlay').classList.add('hidden');
+  if(resume&&panelPaused)resumePanel();
+  if(state==='ready')$('intro').classList.remove('hidden');
+  if(resume)(state==='ready'?$('start'):$('game')).focus({preventScroll:true});
+}
+function selectMenuTab(selected:'how'|'settings'){
+  $('menu-overlay').classList.remove('hidden');
+  $('intro').classList.add('hidden');
   for(const name of ['how','settings']){
     const active=name===selected,tab=$(`tab-${name}`);
     tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;$(`panel-${name}`).classList.toggle('hidden',!active);
@@ -189,14 +200,18 @@ function updateHUD(){
 }
 
 $('start').onclick=start;$('restart').onclick=restart;$('pause').onclick=pause;
-$('resume-panel').onclick=resumePanel;
+$('resume-panel').onclick=()=>closeMenu();
+$('menu-back').onclick=()=>closeMenu();
+$('home-settings').onclick=()=>{selectMenuTab('settings');$('tab-settings').focus();};
+$('home-how').onclick=()=>{selectMenuTab('how');$('tab-how').focus();};
+$('menu').onclick=()=>{selectMenuTab('settings');$('tab-settings').focus();};
 for(const [i,name]of ['how','settings'].entries()){
-  const tab=$(`tab-${name}`);tab.onclick=()=>selectBottomTab(name as 'how'|'settings');
+  const tab=$(`tab-${name}`);tab.onclick=()=>selectMenuTab(name as 'how'|'settings');
   tab.onkeydown=e=>{
     if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
     e.preventDefault();e.stopPropagation();
     const next=e.key==='Home'?'how':e.key==='End'?'settings':i===0?'settings':'how';
-    selectBottomTab(next);$(`tab-${next}`).focus();
+    selectMenuTab(next);$(`tab-${next}`).focus();
   };
 }
 syncSettingsControls();
@@ -213,6 +228,10 @@ const keymap:Record<string,keyof Controls>={w:'gas',arrowup:'gas',s:'brake',arro
 window.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='F3'){e.preventDefault();if(!e.repeat){debugEnabled=!debugEnabled;syncRigDebug();}return;}
+  if(!$('menu-overlay').classList.contains('hidden')){
+    if(e.key==='Escape'){e.preventDefault();closeMenu();return;}
+    if(e.key.toLowerCase()!=='r')return;
+  }
   if(e.target instanceof HTMLElement && e.target.closest('select,input,textarea,[role="tab"]') && e.key.toLowerCase()!=='r')return;
   const key=e.key.toLowerCase();
   if(keymap[key]||['r','p','escape','enter',' '].includes(key))e.preventDefault();
@@ -233,6 +252,12 @@ for(const button of document.querySelectorAll<HTMLButtonElement>('[data-control]
 }
 // Keep keyboard focus inside dialogs; R remains available for instant retries.
 document.addEventListener('keydown',e=>{
+  if(e.key==='Tab'&&!$('menu-overlay').classList.contains('hidden')){
+    const items=[...$('menu-overlay').querySelectorAll<HTMLElement>('button,select,input,[tabindex="0"]')].filter(el=>el.getClientRects().length>0&&el.tabIndex>=0);
+    const first=items[0],last=items[items.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  }
   if(e.key==='Tab'&&!$('modal').classList.contains('hidden')){
     const first=$('modal-primary'),last=$('modal-secondary');
     if(e.shiftKey && document.activeElement===first){e.preventDefault();last.focus();}

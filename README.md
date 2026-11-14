@@ -15,15 +15,15 @@ Paste this into your website's HTML or Custom HTML block:
   src="https://camberdad.github.io/REVBIKE/?embed=1"
   title="REVBIKE dirtbike stunt game"
   width="100%"
-  height="650"
-  style="display:block;max-width:1400px;border:0;border-radius:12px"
+  height="720"
+  style="display:block;aspect-ratio:16/9;height:auto;max-width:1600px;border:0"
   allow="fullscreen; autoplay; gamepad"
   allowfullscreen
   loading="lazy"
 ></iframe>
 ```
 
-The `?embed=1` option fills the iframe with the game and its HUD. Click **LET'S RIDE** inside the game to give it keyboard focus. You can adjust the iframe height to fit your page. Touch controls appear automatically on touch devices.
+The `?embed=1` option fills the iframe with the game and its HUD. Click **LET'S RIDE** inside the game to give it keyboard focus. Use a 16:9 iframe for the same viewport fit as Castle Rangers (1280×720 at the reference viewport); rendering scales to the available size and device pixel ratio. Portrait screens use the full available height. Touch controls appear automatically on touch devices.
 
 GitHub Pages deploys automatically from `main` through `.github/workflows/deploy.yml`, after tests and a production build pass. The repository's Pages source is **GitHub Actions**. Assets use relative paths so the bike model, JavaScript, CSS, and favicon work under `/REVBIKE/` and other subdirectories. The built `dist/` can also be hosted on your own web server.
 
@@ -50,9 +50,9 @@ Open the local URL printed by Vite. `pnpm build` type-checks and produces a stan
 | Pause / resume | P / Escape |
 | Start / retry | Enter / Space |
 
-Touch devices show holdable throttle, brake, and lean buttons. Sound is optional; the toolbar enables a procedural Web Audio engine and explosion sounds. Fullscreen is available in the toolbar. **How to ride** and **Gameplay settings** are tabs at the bottom of the game, including in iframe and fullscreen modes.
+Touch devices show holdable throttle, brake, and lean buttons. Sound is optional; the toolbar enables a procedural Web Audio engine and explosion sounds. Fullscreen is available in the toolbar. **Settings** and **How to ride** are home-menu buttons that open a centered panel with separate tabs and a Back button, including in iframe and fullscreen modes. The toolbar settings button also opens this panel during a ride. The course fills a viewport-fitted 16:9 frame with HUD overlays; the document does not scroll.
 
-Gameplay settings persist in browser storage: Auto/display-refresh rendering or 30/60/120/144 FPS caps; low/medium/high visual quality; blood Off/Low/Medium/High; and screen shake on/off. Blood is off by default and uses stylized red particles on rider crashes. Rendering caps do not change the fixed physics timestep or the timer. Opening a bottom tab during a run pauses the ride; **Resume ride**, P, or Escape resumes it.
+Gameplay settings persist in browser storage: Auto/display-refresh rendering or 30/60/120/144 FPS caps; low/medium/high visual quality; blood Off/Low/Medium/High; and screen shake on/off. Blood is off by default and uses stylized red particles on rider crashes. Rendering caps do not change the fixed physics timestep or the timer. Opening the guide/settings panel during a run pauses the ride; **Back**, **Resume ride**, or Escape resumes it. On the home screen, Back returns to the home menu. R always starts a fresh round, including while a panel is open.
 
 ## Course and rules
 
@@ -96,4 +96,4 @@ pnpm test
 pnpm build
 ```
 
-The regression tests exercise flat-ground settling, ramp traversal, both lean directions, head-strike ragdolls, TNT explosions, full-course completion through the loop, full-round restart, and both clean frontflip/backflip scoring. Rendering tests verify each frame cap, saved-preference validation, and blood amount scaling. A PD balancing controller drives the actual control inputs in course tests; it does not move or teleport the bike. Browser checks cover model loading, throttle, the live timer, R resetting a progressed round, crash blood output, preference persistence, pause/resume, both bottom tabs, and mobile/iframe layouts.
+The regression tests exercise flat-ground settling, ramp traversal, both lean directions, head-strike ragdolls, TNT explosions, full-course completion through the loop, full-round restart, and both clean frontflip/backflip scoring. Rendering tests verify each frame cap, saved-preference validation, and blood amount scaling. A PD balancing controller drives the actual control inputs in course tests; it does not move or teleport the bike. Browser checks cover model loading, throttle, the live timer, R resetting a progressed round, crash blood output, preference persistence, pause/resume, both menu tabs, and desktop/portrait/landscape/iframe layouts.
