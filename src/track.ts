@@ -4,8 +4,8 @@ export type Point = [number, number];
 export type Environment='countryside'|'construction'|'canyon'|'neon'|'volcano';
 export type Hazard = { type: string; x: number; y: number; width?: number; radius?: number;
   delay?:number; triggerX?:number; amplitude?:number; period?:number; phase?:number; anchorY?:number };
-export type MechanismKind='seesaw'|'flex'|'lift'|'roller'|'collapse'|'conveyor'|'spring'|'boost';
-export interface Mechanism {kind:MechanismKind;x:number;y:number;width:number;angle?:number;speed?:number;rise?:number;delay?:number;}
+export type MechanismKind='seesaw'|'flex'|'lift'|'roller'|'collapse'|'conveyor'|'spring'|'boost'|'bridge';
+export interface Mechanism {kind:MechanismKind;x:number;y:number;width:number;angle?:number;speed?:number;rise?:number;delay?:number;link?:boolean;}
 export interface TrackProp {kind:string;x:number;y:number;width?:number;height?:number;}
 export interface Level {
   name: string; subtitle: string; length: number; stars: number[]; spawn: Point;
@@ -13,12 +13,12 @@ export interface Level {
   loop?: { x: number; y: number; radius: number };
   hazards: Hazard[]; checkpoints: number[][]; finish: number[];
   id?:number; environment?:Environment; targetSeconds?:number;
-  setPieces?:{name:string;hint:string;x:number}[];
+  setPieces?:{name:string;hint:string;x:number;kind?:string}[];
   mechanisms?:Mechanism[]; props?:TrackProp[];
   loops?:NonNullable<Level['loop']>[];
   paths?:Point[][]; magneticPaths?:Point[][];
   mode?:'trials'|'stunt';
-  obstacles?:{kind:'crate'|'concrete'|'rock'|'log';x:number;y:number;width:number;height:number;radius?:number}[];
+  obstacles?:{kind:'crate'|'concrete'|'rock'|'log'|'stone';x:number;y:number;width:number;height:number;radius?:number}[];
 }
 export const level1 = data as Level;
 export const testLevel: Level = {

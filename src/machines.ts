@@ -12,10 +12,11 @@ export class CourseMachines{
  constructor(private world:RAPIER.World,private level:Level,private terrain:Set<number>){
   for(const spec of level.mechanisms??[]){
    const rotating=spec.kind==='seesaw'||spec.kind==='flex';
-   const desc=rotating?RAPIER.RigidBodyDesc.dynamic():RAPIER.RigidBodyDesc.kinematicPositionBased();
-   const body=world.createRigidBody(desc.setTranslation(spec.x,spec.y).setRotation(spec.angle??0).setAngularDamping(2).setCcdEnabled(true));
+   const desc=rotating||spec.kind==='bridge'?RAPIER.RigidBodyDesc.dynamic():RAPIER.RigidBodyDesc.kinematicPositionBased();
+   const body=world.createRigidBody(desc.setTranslation(spec.x,spec.y).setRotation(spec.angle??0).setAngularDamping(2).setLinearDamping(spec.kind==='bridge'?.6:0).setCcdEnabled(true));
    const shape=spec.kind==='roller'?RAPIER.ColliderDesc.ball(spec.width/2):RAPIER.ColliderDesc.roundCuboid(spec.width/2-.08,.09,.08);
-   const collider=world.createCollider(shape.setMass(spec.kind==='seesaw'?3:1.8).setFriction(spec.kind==='roller'?2.4:1.5).setCollisionGroups(GROUP),body);
+   const friction=spec.kind==='roller'?2.4:spec.kind==='bridge'?2.4:spec.kind==='seesaw'||spec.kind==='flex'?2.6:1.5;
+   const collider=world.createCollider(shape.setMass(spec.kind==='seesaw'?3:spec.kind==='bridge'?1.1:1.8).setFriction(friction).setCollisionGroups(GROUP),body);
    if(spec.kind==='boost')collider.setSensor(true);else terrain.add(collider.handle);
    if(rotating){
     const anchor=world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(spec.x,spec.y));
@@ -24,6 +25,17 @@ export class CourseMachines{
    }
    this.items.push({spec,body,collider,timer:0,activated:false,broken:false,cooldown:0});
   }
+  // Rickety bridges: consecutive linked planks hinge edge to edge, and each
+  // chain hangs from fixed posts at both ends so it sags and sways under load.
+  this.items.forEach((item,i)=>{
+   if(item.spec.kind!=='bridge')return;
+   const half=item.spec.width/2,a=item.spec.angle??0,edge=(side:number)=>({x:item.spec.x+side*half*Math.cos(a),y:item.spec.y+side*half*Math.sin(a)});
+   const hinge=(other:RAPIER.RigidBody,otherAnchor:{x:number;y:number},anchor:{x:number;y:number})=>world.createImpulseJoint(RAPIER.JointData.revolute(otherAnchor,anchor),other,item.body,true).setContactsEnabled(false);
+   const previous=this.items[i-1],next=this.items[i+1];
+   if(item.spec.link&&previous?.spec.kind==='bridge')hinge(previous.body,{x:previous.spec.width/2,y:0},{x:-half,y:0});
+   else{const p=edge(-1);hinge(world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x,p.y)),{x:0,y:0},{x:-half,y:0});}
+   if(!(next?.spec.kind==='bridge'&&next.spec.link)){const p=edge(1);hinge(world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(p.x,p.y)),{x:0,y:0},{x:half,y:0});}
+  });
  }
  private touching(item:MachineState,bike:Bike){
   if(item.spec.kind==='boost')return bike.wheels.some(w=>{const p=w.translation(),a=item.spec.angle??0,c=Math.cos(a),s=Math.sin(a),dx=p.x-item.spec.x,dy=p.y-item.spec.y;return Math.abs(dx*c+dy*s)<item.spec.width/2&&Math.abs(-dx*s+dy*c-.6)<1;});
@@ -94,7 +106,7 @@ export class CourseMachines{
   for(const item of this.items){
    item.timer=0;item.activated=false;item.broken=false;item.cooldown=0;
    const {spec,body,collider}=item;
-   body.setBodyType(spec.kind==='seesaw'||spec.kind==='flex'?RAPIER.RigidBodyType.Dynamic:RAPIER.RigidBodyType.KinematicPositionBased,true);
+   body.setBodyType(spec.kind==='seesaw'||spec.kind==='flex'||spec.kind==='bridge'?RAPIER.RigidBodyType.Dynamic:RAPIER.RigidBodyType.KinematicPositionBased,true);
    body.setTranslation({x:spec.x,y:spec.y},true);body.setRotation(spec.angle??0,true);body.setLinvel({x:0,y:0},true);body.setAngvel(0,true);
    collider.setCollisionGroups(GROUP);if(spec.kind!=='boost')this.terrain.add(collider.handle);
   }

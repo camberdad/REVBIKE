@@ -75,7 +75,7 @@ $('app').innerHTML=`
           <p>${isTrials?'Balance. Feather the gas. Control the climb.<br>Finish with zero faults.':'Find your balance. Send the gaps.<br>Stick the landing. Chase three stars.'}</p>
           <div class="mode-switch" aria-label="Game modes"><a class="${isTrials?'selected':''}" href="./?mode=trials">TRIALS DIRTBIKE</a><a class="${!isTrials?'selected':''}" href="./?mode=stunt">STUNT</a></div><div class="home-menu"><button id="start" class="primary-button">${isTrials?'RIDE TRIALS':'LET’S RIDE'} ${icon('arrow')}</button><button id="home-levels" class="menu-button">${icon('flag')} LEVEL SELECT</button><button id="home-garage" class="menu-button">${icon('settings')} GARAGE & RIDER</button><button id="home-settings" class="menu-button">${icon('settings')} SETTINGS</button><button id="home-how" class="menu-button">${icon('help')} HOW TO RIDE</button></div><span class="enter-hint">PRESS ENTER TO RIDE</span>
         </div>
-        <div id="riding-hint" class="riding-hint hidden"><kbd>W</kbd> GAS <span>·</span> <kbd>A</kbd><kbd>D</kbd> WEIGHT <span>·</span> <kbd>SPACE</kbd> HOP</div>
+        <div id="riding-hint" class="riding-hint hidden"><kbd>W</kbd> GAS <span>·</span> <kbd>S</kbd> BRAKE <span>·</span> <kbd>A</kbd><kbd>D</kbd> WEIGHT <span>·</span> <kbd>A</kbd>→<kbd>D</kbd>+<kbd>W</kbd> HOP</div>
         <div class="stage-bottom"><div class="scene-caption"><span class="crosshair">+</span> <span>NO ROAD. NO RULES.<br><b>JUST YOU & GRAVITY.</b></span></div><div class="speed-readout"><span id="speed">00</span><small>KM/H</small><i></i><span class="gear-label">DIRT<br><b>MODE</b></span></div></div>
         <div id="touch-controls" class="touch-controls"><div><button data-control="left" aria-label="Lean back">↶</button><button data-control="right" aria-label="Lean forward">↷</button></div><button class="touch-hop" data-control="hop" aria-label="Bunny hop">HOP</button><div><button data-control="brake" aria-label="Brake">↓</button><button data-control="gas" aria-label="Accelerate">↑</button></div></div>
         <div id="modal" class="modal-backdrop hidden"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><span id="modal-kicker" class="eyebrow"></span><h2 id="modal-title"></h2><div id="modal-content"></div><button id="modal-primary" class="primary-button"></button><button id="modal-secondary" class="text-button"></button></div></div>
@@ -88,7 +88,7 @@ $('app').innerHTML=`
       <div id="menu-overlay" class="menu-overlay hidden"><div class="menu-card" role="dialog" aria-modal="true" aria-label="Ride guide and settings"><div class="menu-card-heading"><span class="eyebrow">REVBIKE / PIT STOP</span><button id="menu-back" class="menu-back">← BACK</button></div><div class="bottom-tabs-row"><div class="bottom-tabs" role="tablist" aria-label="Game guide and preferences"><button id="tab-how" role="tab" aria-selected="true" aria-controls="panel-how">${icon('help')} HOW TO RIDE</button><button id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" tabindex="-1">${icon('settings')} GAMEPLAY SETTINGS</button></div><button id="resume-panel" class="resume-panel hidden">RESUME RIDE ${icon('play')}</button></div>
       <section id="panel-how" class="bottom-panel" role="tabpanel" aria-labelledby="tab-how" tabindex="0">
         <div class="controls-guide"><div class="control-item"><span class="key-pair"><kbd>W</kbd><small>↑</small></span><span>THROTTLE<small>${isTrials?'Tap for control.':'Give it some.'}</small></span></div><div class="control-item"><span class="key-pair"><kbd>S</kbd><small>↓</small></span><span>${isTrials?'BRAKE / HOLD':'BRAKE / REVERSE'}<small>Keep it in check.</small></span></div><div class="control-item"><span class="key-pair double"><kbd>A</kbd><kbd>D</kbd></span><span>${isTrials?'WEIGHT / PITCH':'LEAN / FLIP'}<small>${isTrials?'Balance, then align.':'Own the airtime.'}</small></span></div><div class="control-item"><kbd>R</kbd><span>CHECKPOINT RETRY<small>One fault. Keep practicing.</small></span></div><div class="control-item"><kbd>SPACE</kbd><span>BUNNY HOP<small>Ground contact required.</small></span></div><div class="control-item"><kbd>T</kbd><span>TRACK RESTART<small>Or Backspace. Clean slate.</small></span></div><div class="control-item"><kbd>P</kbd><span>PAUSE<small>Take a breather.</small></span></div></div>
-        <div class="guide-note"><span>${isTrials?'A / D shift rider weight on the ground and align the bike in the air. Tap W, or hold Shift + W for precision gas. R retries the checkpoint; T / Backspace restarts the track. Zero faults earns Gold; zero faults under par earns Platinum.':'Land clean flips for −0.5s each. Space bunny-hops, R retries the checkpoint and T / Backspace restarts the track.'}</span><div class="star-targets">${level.stars.map((t,i)=>`<div class="star-target"><span>${star.repeat(3-i)}</span><b>${isTrials?['0F','≤3F','≤8F'][i]:`&lt; ${t}s`}</b></div>`).join('')}</div></div>
+        <div class="guide-note"><span>${isTrials?'Feather W: full gas lifts the front and can loop you out, so lean forward with D on climbs. A / D move your weight on the ground and set the landing angle in the air; land rear wheel first. Hold A, then snap to D with gas to bunny-hop (Space also hops). S stops you dead. Shift + W is precision gas. Every crash or R retry is a fault; T / Backspace restarts. Zero faults earns Gold; zero under par earns Platinum.':'Land clean flips for −0.5s each. Space bunny-hops, R retries the checkpoint and T / Backspace restarts the track.'}</span><div class="star-targets">${level.stars.map((t,i)=>`<div class="star-target"><span>${star.repeat(3-i)}</span><b>${isTrials?['0F','≤3F','≤8F'][i]:`&lt; ${t}s`}</b></div>`).join('')}</div></div>
       </section>
       <section id="panel-settings" class="bottom-panel hidden" role="tabpanel" aria-labelledby="tab-settings" tabindex="0">
         <div class="settings-grid">
@@ -112,12 +112,13 @@ let activeFlips=0,modalPrimary=()=>{},modalSecondary=()=>{};
 let panelPaused=false;
 let checkpointSnapshot:ReturnType<Simulation['captureCheckpoint']>|undefined;
 let checkpointBonus=0,checkpointFlips=0;
+function flashFault(){const el=$('faults').parentElement!;el.classList.remove('fault-hit');void el.offsetWidth;el.classList.add('fault-hit');}
 function retryCheckpoint(){
- if(!sim)return;if(!sim.crashed)faults++;
+ if(!sim)return;const manual=!sim.crashed;if(manual){faults++;if(isTrials)flashFault();}
  clearControls();$('level-overlay').classList.add('hidden');$('garage-overlay').classList.add('hidden');
  if(checkpointSnapshot){sim.restoreCheckpoint(checkpointSnapshot);bonus=checkpointBonus;activeFlips=checkpointFlips;}
  else{sim.restartRound();bonus=0;activeFlips=0;}
- view.reset(sim.bike.frame.translation());for(let i=0;i<=checkpoint;i++)view.checkpoint(i);start();updateHUD();toast('CHECKPOINT RETRY / CLOCK KEEPS RUNNING');
+ view.reset(sim.bike.frame.translation());for(let i=0;i<=checkpoint;i++)view.checkpoint(i);start();updateHUD();toast(manual&&isTrials?'+1 FAULT / CHECKPOINT RETRY':'CHECKPOINT RETRY / CLOCK KEEPS RUNNING');
 }
 
 const controls:Controls={gas:false,brake:false,left:false,right:false,precision:false,hop:false};
@@ -372,7 +373,7 @@ async function boot(){
     sim.onCrash=()=>{
       if(state!=='playing')return;faults++;state='crashed';crashElapsed=0;clearControls();audio.explosion();
       const p=sim.bike.frame.translation();view.burst(p.x,p.y+0.6);view.bloodBurst(p.x,p.y+1);$('run-status').textContent='RIDER DOWN';$('timer-state').textContent='R RETRIES / T RESTARTS';
-      toast('RIDER DOWN / R RETRIES THE CHECKPOINT');
+      if(isTrials){flashFault();toast(`+1 FAULT / ${sim.crashReason||'RIDER DOWN'} / R RETRIES`);}else toast('RIDER DOWN / R RETRIES THE CHECKPOINT');
     };
     // Settle the suspension before presenting the opening scene.
     for(let i=0;i<100;i++)sim.step(controls);
