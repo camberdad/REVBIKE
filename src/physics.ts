@@ -16,9 +16,22 @@ export const TUNING = { gravity:-22, rearTorque:26, leanTorque:72, wheelieTorque
 export const TRIALS_DIMENSIONS={wheelRadius:.62,wheelOffsets:[-1.28,1.04] as const,
  suspensionAnchorY:-.05,fullDroopAxleY:-.78,fullBumpAxleY:-.20,freeAxleY:-.56};
 export const TRIALS_TUNING={...TUNING,rearTorque:88,leanTorque:0,wheelieTorque:0,airLeanTorque:44,backwardAirTorque:42,airCounterTorque:65,
- maxWheelSpeed:18,springStiffness:380,compressionDamping:46,reboundDamping:36,wheelFriction:4.2,tireRestitution:.01,
+ maxWheelSpeed:18,springStiffness:380,compressionDamping:46,reboundDamping:36,wheelFriction:5.2,tireRestitution:.01,
  groundAngularDamping:1.2,airAngularDamping:1.1,releaseAngularDamping:2,releasePitchDrag:8,maxAirAngularSpeed:4.2,maxBackwardAngularSpeed:4.0,
  leanResponseTime:.08,backwardLeanResponseTime:.1,leanReleaseTime:.07};
+// Trials drivetrain. Engine and brake torques are internal: whatever twists the
+// rear wheel twists the chassis the other way. Full gas therefore lifts the nose
+// and can loop the bike out unless the rider moves forward.
+export const TRIALS_ENGINE={
+ lowEndBoost:1.5,   // torque multiplier at zero wheel speed, tapering to 0 at the ceiling
+ throttleResponse:.03,
+ reaction:1.1,        // share of engine torque reacted into the chassis
+ brakeTorque:150, brakeReaction:.55,
+ terrainFriction:3.6, obstacleFriction:4,
+ popVelocity:5.6,    // A → D weight-snap bunny hop, scaled by preload
+ popWindow:.32, popMinPreload:.08, popFullPreload:.32,
+ badLandingSpeed:6.5, badLandingPitch:.5,
+};
 export interface RenderPose{x:number;y:number;angle:number;}
 export interface Controls { gas: boolean; brake: boolean; left: boolean; right: boolean; precision?:boolean;hop?:boolean }
 export interface Bike {
@@ -80,6 +93,11 @@ export class Simulation {
   private hopWasDown=false;
   private hopCooldown=0;
   hopCount=0;
+  /** Why the most recent crash happened, for the HUD. */
+  crashReason='';
+  /** Engine torque currently reaching the rear wheel, 0–1 of peak. */
+  drive=0;
+  private backPreload=0;private lastBackTime=-1;private rightWasDown=false;
   private previousPoses:RenderPose[]=[];
   constructor(public level: Level) {
     this.isTrials=level.mode==='trials';this.dimensions=this.isTrials?TRIALS_DIMENSIONS:BIKE_DIMENSIONS;
@@ -118,8 +136,9 @@ export class Simulation {
     this.machines=new CourseMachines(this.world,level,this.terrain);
     for(const obstacle of level.obstacles??[]){
       const r=obstacle.radius??.09;
-      const collider=this.world.createCollider((obstacle.kind==='log'?RAPIER.ColliderDesc.ball(obstacle.height/2):RAPIER.ColliderDesc.roundCuboid(obstacle.width/2-r,obstacle.height/2-r,r))
-       .setTranslation(obstacle.x,obstacle.y).setFriction(3.5).setRestitution(0).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
+      const round=obstacle.kind==='log'||obstacle.kind==='stone';
+      const collider=this.world.createCollider((round?RAPIER.ColliderDesc.ball(obstacle.height/2):RAPIER.ColliderDesc.roundCuboid(obstacle.width/2-r,obstacle.height/2-r,r))
+       .setTranslation(obstacle.x,obstacle.y).setFriction(this.isTrials?TRIALS_ENGINE.obstacleFriction:3.5).setRestitution(0).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
       this.terrain.add(collider.handle);
     }
     this.spawn(level.spawn);
@@ -128,7 +147,7 @@ export class Simulation {
   private addSurface(points: Point[]) {
     // A single polyline avoids internal seam collisions between adjacent ramp pieces.
     const collider=this.world.createCollider(RAPIER.ColliderDesc.polyline(new Float32Array(points.flat()))
-      .setFriction(this.isTrials?3:1.6).setContactSkin(this.isTrials?.004:0).setRestitution(0).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
+      .setFriction(this.isTrials?TRIALS_ENGINE.terrainFriction:1.6).setContactSkin(this.isTrials?.004:0).setRestitution(0).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
     this.terrain.add(collider.handle);
     return collider;
   }
@@ -181,7 +200,7 @@ export class Simulation {
       this.bike.rider=rider;this.bike.riderJoint=joint;this.bike.riderVerticalJoint=vertical;this.bike.bodies.push(carrier,rider);
     }
     this.previousPoses=this.currentPoses();this.throttle=0;this.riderShift=0;this.riderCrouch=0;this.grounded=false;this.hopWasDown=false;this.hopCooldown=0;this.riderTargetX=-.1;this.riderTargetY=-.1;
-    this.leanInput=0;
+    this.leanInput=0;this.backPreload=0;this.lastBackTime=-1;this.rightWasDown=false;this.crashReason='';this.drive=0;
     this.crashed=false; this.airRotation=0; this.airborneTime=0; this.lastAngle=0; this.previousGrounded=true;this.pendingFlip=undefined;
     this.loopPhase=this.level.loop && x>this.level.loop.x+this.level.loop.radius?'complete':'approach';
     this.loopColliders.forEach((collider,i)=>collider.setCollisionGroups(this.loopPhase==='complete'||i===1?0:GROUND));
@@ -257,11 +276,20 @@ export class Simulation {
     if (!this.crashed) {
       const {frame,wheels}=this.bike;
       this.hopCooldown=Math.max(0,this.hopCooldown-STEP);
-      if(input.hop&&!this.hopWasDown&&this.grounded&&this.hopCooldown===0){
-        for(const body of this.bike.bodies)body.applyImpulse({x:input.gas?body.mass()*1.2:0,y:body.mass()*6.2},true);
-        this.hopCooldown=.55;this.hopCount++;
-      }
+      if(input.hop&&!this.hopWasDown&&this.grounded&&this.hopCooldown===0)this.bunnyHop(6.2,input.gas?1.2:0,false);
       this.hopWasDown=!!input.hop;
+      if(this.isTrials){
+        // Weight-snap bunny hop: load the rear with A, then snap forward with D
+        // while the engine is pulling. The rear end kicks up more than the front.
+        const right=!!input.right,E=TRIALS_ENGINE;
+        if(this.grounded&&input.left&&!right){this.backPreload=Math.min(E.popFullPreload,this.backPreload+STEP);this.lastBackTime=this.clock;}
+        else if(this.clock-this.lastBackTime>E.popWindow)this.backPreload=0;
+        if(right&&!this.rightWasDown&&this.grounded&&this.hopCooldown===0&&this.backPreload>=E.popMinPreload&&(input.gas||this.throttle>.3)){
+          const load=Math.min(1,this.backPreload/E.popFullPreload);
+          this.bunnyHop(E.popVelocity*(.7+.3*load),1.1,true);this.backPreload=0;
+        }
+        this.rightWasDown=right;
+      }
       this.machines.step(this.bike);
       for(const rail of this.magneticRails){const done=this.machines.magnetDone.has(rail.index),progress=this.machines.magnetProgress[rail.index]??0;rail.colliders[0].setCollisionGroups(done?0:GROUND);rail.colliders[1].setCollisionGroups(!done&&progress>75?GROUND:0);}
       const d=this.dimensions;
@@ -270,13 +298,26 @@ export class Simulation {
           wheel.compressionVelocity>0?this.tuning.compressionDamping:this.tuning.reboundDamping);
       }
       if(this.isTrials){
+        const E=TRIALS_ENGINE,rear=wheels[0];
         const demand=input.gas?(input.precision?.38:1):0;
-        this.throttle+=(demand-this.throttle)*(1-Math.exp(-STEP/.035));
-        if(this.throttle>.005&&wheels[0].angvel()>-this.tuning.maxWheelSpeed*(input.precision?.4:1))wheels[0].applyTorqueImpulse(-this.tuning.rearTorque*this.throttle*STEP,true);
-        if(!input.gas)wheels[0].applyTorqueImpulse(-wheels[0].angvel()*.6*STEP,true);
-        if(input.brake)for(const wheel of wheels){const w=wheel.angvel();wheel.applyTorqueImpulse(Math.max(-140*STEP,Math.min(140*STEP,-w*.164)),true);}
+        this.throttle+=(demand-this.throttle)*(1-Math.exp(-STEP/E.throttleResponse));
+        // Instant low-end torque that fades out toward the wheel-speed ceiling.
+        const ceiling=this.tuning.maxWheelSpeed*(input.precision?.4:1),f=Math.max(0,-rear.angvel()/ceiling);
+        const curve=f>=1?0:E.lowEndBoost*(1-f*f);
+        this.drive=this.throttle*curve/E.lowEndBoost;
+        const torque=this.tuning.rearTorque*this.throttle*curve;
+        // The internal reaction pitches the chassis nose-up: wheelies, loop-outs.
+        if(torque>0){rear.applyTorqueImpulse(-torque*STEP,true);frame.applyTorqueImpulse(torque*E.reaction*STEP,true);}
+        if(!input.gas){const engineBrake=-rear.angvel()*.6*STEP;rear.applyTorqueImpulse(engineBrake,true);frame.applyTorqueImpulse(-engineBrake*E.reaction,true);}
+        // Snappy brakes lock the wheels; the caliper reaction dives the chassis.
+        if(input.brake)for(const wheel of wheels){
+          const w=wheel.angvel(),impulse=Math.max(-E.brakeTorque*STEP,Math.min(E.brakeTorque*STEP,-w*.17));
+          wheel.applyTorqueImpulse(impulse,true);frame.applyTorqueImpulse(-impulse*E.brakeReaction,true);
+        }
         const shift=Number(input.right)-Number(input.left),incline=Math.max(0,Math.min(1,(frame.rotation()-.15)/.55));
-        this.riderTargetX+=((this.grounded?(shift>0?.45+incline*1.05:shift<0?-.62:-.1):this.riderTargetX)-this.riderTargetX)*(1-Math.exp(-STEP/.16));
+        // Forward snaps are quicker than settling back, so D can catch a wheelie.
+        const xResponse=shift>0?.09:shift<0?.11:.16;
+        this.riderTargetX+=((this.grounded?(shift>0?.45+incline*1.05:shift<0?-.62:-.1):this.riderTargetX)-this.riderTargetX)*(1-Math.exp(-STEP/xResponse));
         this.riderTargetY+=((this.grounded?(shift>0?-.2-incline*.2:shift<0?.1:-.1):this.riderTargetY)-this.riderTargetY)*(1-Math.exp(-STEP/.18));
         this.bike.riderJoint!.configureMotorPosition(this.riderTargetX,900,75);
         this.bike.riderVerticalJoint!.configureMotorPosition(this.riderTargetY,1200,85);
@@ -317,13 +358,14 @@ export class Simulation {
     this.events.drainCollisionEvents((a,b,started) => {
       if (!started || this.crashed) return;
       const rider=[this.bike.head.handle,this.bike.torso.handle];
-      if (!this.machines.magnetic&&((rider.includes(a) && this.terrain.has(b)) || (rider.includes(b) && this.terrain.has(a)))) crashRequested=true;
+      if (!this.machines.magnetic&&((rider.includes(a) && this.terrain.has(b)) || (rider.includes(b) && this.terrain.has(a)))){crashRequested=true;this.crashReason||='RIDER HIT THE GROUND';}
       const hazardIndex=this.hazards.get(a) ?? this.hazards.get(b);
       if (hazardIndex!==undefined && !this.exploded.has(hazardIndex)) {
         const other=this.hazards.has(a)?b:a,parent=this.world.getCollider(other)?.parent();
         if(!parent||!this.bike.bodies.some(body=>body.handle===parent.handle))return;
         const h=this.level.hazards[hazardIndex];
         if(h.type==='tnt'&&h.delay){if(!this.fuses.has(hazardIndex))this.fuses.set(hazardIndex,h.delay);return;}
+        this.crashReason||=h.type==='lava'?'INTO THE LAVA':h.type==='mud'?'INTO THE PIT':h.type==='laser'?'LASER':'HAZARD';
         if (this.level.hazards[hazardIndex].type==='tnt') {
           this.exploded.add(hazardIndex); this.onExplosion?.(hazardIndex);
         }
@@ -331,15 +373,23 @@ export class Simulation {
       }
     });
     if (crashRequested) this.crash();
-    this.grounded=this.bike.wheels.some(wheel=>{
-      let touching=false;
+    const normals:({x:number;y:number}|null)[]=this.bike.wheels.map(wheel=>{
+      let normal:{x:number;y:number}|null=null;
       wheel.collider(0) && this.world.contactPairsWith(wheel.collider(0),(other)=>{
         if(this.terrain.has(other.handle)) this.world.contactPair(wheel.collider(0),other,(manifold)=>{
-          if (manifold.numSolverContacts()>0) touching=true;
+          if (manifold.numSolverContacts()>0){const n=manifold.normal();normal=n.y<0?{x:-n.x,y:-n.y}:{x:n.x,y:n.y};}
         });
       });
-      return touching;
+      return normal;
     });
+    this.grounded=normals.some(Boolean);
+    // Trials landings: a hard, nose-first touchdown on the front wheel is a fault.
+    // Rear-first (or matched-to-slope) landings are absorbed by the suspension.
+    if(this.isTrials&&!this.crashed&&!this.previousGrounded&&this.airborneTime>.2&&normals[1]&&!normals[0]){
+      const n=normals[1],a=this.bike.frame.rotation(),ux=-Math.sin(a),uy=Math.cos(a),v=this.bike.frame.linvel();
+      const pitch=Math.atan2(n.x*uy-n.y*ux,n.x*ux+n.y*uy),impact=-(v.x*n.x+v.y*n.y);
+      if(pitch<-TRIALS_ENGINE.badLandingPitch&&impact>TRIALS_ENGINE.badLandingSpeed){this.crashReason='NOSE-FIRST LANDING';this.crash();}
+    }
     const angle=this.bike.frame.rotation();
     const delta=Math.atan2(Math.sin(angle-this.lastAngle),Math.cos(angle-this.lastAngle));
     this.lastAngle=angle;
@@ -371,9 +421,20 @@ export class Simulation {
     if (this.bike.frame.translation().y < -12) this.crash();
   }
 
+  /** Grounded hop. A weight-snap pop lifts the rear more than the front. */
+  private bunnyHop(up:number,forward:number,rearBias:boolean){
+    const {wheels,carriers}=this.bike,rear=new Set([wheels[0].handle,carriers[0].handle]),front=new Set([wheels[1].handle,carriers[1].handle]);
+    for(const body of this.bike.bodies){
+      const k=!rearBias?1:rear.has(body.handle)?1.45:front.has(body.handle)?.75:1;
+      body.applyImpulse({x:body.mass()*forward,y:body.mass()*up*k},true);
+    }
+    this.hopCooldown=.55;this.hopCount++;
+  }
+
   crash() {
     if(this.crashed) return;
     this.crashed=true;
+    if(!this.crashReason)this.crashReason=this.bike.frame.translation().y<-12?'FELL OFF THE COURSE':'RIDER DOWN';
     const {frame,head}=this.bike;
     head.setCollisionGroups(0);
     this.bike.torso.setCollisionGroups(0);

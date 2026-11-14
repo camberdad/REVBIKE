@@ -42,12 +42,13 @@ Open the local URL printed by Vite. `pnpm build` type-checks and produces a stan
 
 | Action | Keyboard |
 | --- | --- |
-| Feather rear-wheel throttle | W / Up |
+| Feather rear-wheel throttle (full gas lifts the front) | W / Up |
 | Precision throttle | Shift + W / Up |
 | High-grip brake / hold position | S / Down |
 | Move rider rearward on ground; pitch back in air | A / Left |
 | Move rider forward/crouch on ground; pitch forward in air | D / Right |
-| Bunny hop, grounded only | Space / touch HOP |
+| Bunny hop: hold A, then snap to D with gas | A → D + W |
+| Bunny hop, grounded only (shortcut) | Space / touch HOP |
 | Instant checkpoint retry; adds one fault | R (C alias) |
 | Full track restart; clears faults and clock | T / Backspace / toolbar restart |
 | Pause / resume | P / Escape |
@@ -59,11 +60,11 @@ Gameplay settings persist in browser storage: Auto/display-refresh rendering or 
 
 ## Course and rules
 
-The default **Trials Dirtbike** mode has **30 unlocked technical tracks across five environments**, with three skill sections and two checkpoints per track. Rounded solid logs, crates and ledges, narrow suspended decks, seesaws, 55–65° climbs, controlled drops and small precision gaps replace long launch ramps. Level Select groups six courses per environment and saves fault-first personal bests. Direct links use `?mode=trials&level=1` through `level=30`.
+The default **Trials Dirtbike** mode has **30 unlocked technical tracks across five environments**, with four skill sections and three checkpoints per track. Step-up walls, crate staircases and ledges, logs and rock gardens, narrow balance planks, teeter-totters, sagging rickety bridges, 55–65° rocky climbs, sheer drops and stepped zero-speed gaps replace long launch ramps. Holding full throttle alone cannot finish any course. Level Select groups six courses per environment and saves fault-first personal bests. Direct links use `?mode=trials&level=1` through `level=30`.
 
 **Faults rank ahead of time.** Zero faults earns Gold; zero faults at or under the track's par earns Platinum. Up to three faults earns Silver, up to eight Bronze. Crashes count once; pressing R after a crash does not add a second fault. Manual R retries add one fault. R restores the latest checkpoint's bike, rider posture and obstacle state, keeping the elapsed clock running. T / Backspace starts a clean track with zero faults and a new clock.
 
-Space gives a short, grounded bunny hop. Holding it does not repeat; there is no double jump. Combine a gas pulse and A → D weight movement to climb ledges. Trials uses high low-end torque, strong non-reversing brakes, a lower speed ceiling, larger tires and a longer rear swingarm. Ground lean moves a physical rider mass with horizontal/vertical joints; it does not apply a chassis pitch motor. Air pitch remains responsive and bounded for landing alignment. See [research, tuning and verification](docs/trials-design.md).
+Engine and brake torque react into the chassis: full gas lifts the front and loops the bike out on steep ground unless the rider leans forward (D); braking dives the nose. Hold A to load the rear, then snap to D with gas for a weight-shift bunny hop; Space is a shortcut hop. Holding either does not repeat; there is no double jump. A hard nose-first landing is a fault, so land rear wheel first. Trials uses high low-end torque, strong non-reversing brakes, a lower speed ceiling, larger tires and a longer rear swingarm. Ground lean moves a physical rider mass with horizontal/vertical joints; it does not apply a chassis pitch motor. Air pitch remains responsive and bounded for landing alignment. See [research, tuning and verification](docs/trials-design.md).
 
 The **Garage & Rider** menu saves bike paint, jersey, helmet and rider number. Complete one different Trials track to unlock **Rock Crawler**, and five to unlock **Section R**. Bikes have distinct body additions and engine/grip settings. All tracks remain unlocked for testing.
 
@@ -111,7 +112,7 @@ pnpm test
 pnpm build
 ```
 
-The 80 regressions cover Trials spawns/geometry, Space hop gating, real rider mass transfer, snappy brakes, precision throttle, sub-3 mm flat-ground chassis ripple, read-only draw interpolation, fault ranking and garage validation. Input-driven checks clear the tutorial, a staircase and tall ledges, and the authored 60°/65° faces. The archived Stunt suite still drives all 25 full courses, collects their checkpoints and traverses their loops. The full 30-track Trials campaign has not been manually cleared end to end.
+The 102 regressions cover Trials spawns/geometry, engine-reaction loop-outs, A → D and Space hop gating, real rider mass transfer, snappy brakes that hold on 45°, nose-first landing faults, bridge sag and teeter tipping, sub-3 mm flat-ground chassis ripple, read-only draw interpolation, fault ranking and garage validation. A scripted rider that only presses W/S/A/D clears an authored example of every section type, every staircase, and the 55°/60°/65° faces; holding W alone fails all 30 courses. `scripts/sweep-trials.ts` prints a pass/fail grid for every section. The archived Stunt suite still drives all 25 full courses, collects their checkpoints and traverses their loops. The full 30-track Trials campaign has not been manually cleared end to end.
 
 Browser checks cover a quick Space tap, R fault increments, T / Backspace resets, a zero-fault tutorial finish, a bike unlock, saved rider appearance, the six-card phone grid, menu tabs, and model loading. `node node_modules/tsx/dist/cli.mjs scripts/measure-trials.ts` repeats the flat-ground/brake measurements.
 

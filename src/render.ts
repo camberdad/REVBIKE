@@ -256,6 +256,8 @@ export class GameRenderer {
         const log=mesh(new THREE.CylinderGeometry(o.height/2,o.height/2,1.9,32),material(0x896043),group);log.rotation.x=Math.PI/2;
         const cut=mesh(new THREE.CircleGeometry(o.height*.43,32),material(0xc49661),group,0,0,.96);
         for(const r of [.18,.3])mesh(new THREE.TorusGeometry(o.height*r,.015,4,24),material(0x95683d),group,0,0,.98);
+      }else if(o.kind==='stone'){
+        const stone=mesh(new THREE.DodecahedronGeometry(o.height/2,0),material(0x8a7d70),group);stone.scale.set(1,1,3.6);stone.rotation.z=o.x*1.7;
       }else{
         const mat=material(o.kind==='crate'?0xa8794c:o.kind==='rock'?0x8f8174:0x9ba5a1);
         box(group,o.width,o.height,1.9,mat);
@@ -350,9 +352,16 @@ export class GameRenderer {
   }
 
   private buildMachines(){
-    for(const m of this.level.mechanisms??[]){
+    const all=this.level.mechanisms??[];
+    all.forEach((m,i)=>{
+      // Fixed rope posts at each end of a rickety bridge.
+      if(m.kind!=='bridge')return;const a=m.angle??0,ends:number[]=[];
+      if(!m.link)ends.push(-1);if(!(all[i+1]?.kind==='bridge'&&all[i+1].link))ends.push(1);
+      for(const side of ends){const x=m.x+side*m.width/2*Math.cos(a),y=m.y+side*m.width/2*Math.sin(a);for(const z of [-.95,.95]){rod(this.scene,[x,y-1.6,z],[x,y+1.1,z],.09,material(0x6e4a2c));rod(this.scene,[x,y+1,z],[x+side*-1.2,y+.15,z],.025,mats.ink);}}
+    });
+    for(const m of all){
       const group=new THREE.Group();group.position.set(m.x,m.y,0);this.scene.add(group);this.machineMeshes.push(group);
-      const neon=this.level.environment==='neon',deck=m.kind==='spring'?material(0xeed552):m.kind==='boost'?material(0x59e6d5):m.kind==='collapse'&&neon?new THREE.MeshStandardMaterial({color:0x75e8eb,transparent:true,opacity:.65}):m.kind==='seesaw'||m.kind==='collapse'?material(0x9a6840):mats.metal;
+      const neon=this.level.environment==='neon',deck=m.kind==='spring'?material(0xeed552):m.kind==='boost'?material(0x59e6d5):m.kind==='collapse'&&neon?new THREE.MeshStandardMaterial({color:0x75e8eb,transparent:true,opacity:.65}):m.kind==='seesaw'||m.kind==='collapse'||m.kind==='bridge'?material(0x9a6840):mats.metal;
       if(m.kind==='roller'){
         const roller=mesh(new THREE.CylinderGeometry(m.width/2,m.width/2,1.8,24),mats.metal,group);roller.rotation.x=Math.PI/2;
         for(const a of [0,Math.PI/2,Math.PI,Math.PI*1.5])box(group,.1,m.width,.08,mats.orange,0,0,1).rotation.z=a;

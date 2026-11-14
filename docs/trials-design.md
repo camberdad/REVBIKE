@@ -52,8 +52,53 @@ Repeat with `node node_modules/tsx/dist/cli.mjs scripts/measure-trials.ts`. In t
 
 Braking a settled 5 m/s Trials roll for 0.30 seconds leaves approximately **0.050 m/s** forward speed, with no crash. Holding the brake afterward does not drive into reverse. Space produces a short hop and re-arms after landing; holding it or tapping in the air adds no extra jump.
 
-The 80 automated regressions include every Trials spawn and curve, real weight transfer, posture restoration, brakes, throttle pulses, hop gating, ride ripple, interpolation, fault ranking and garage validation. Input-driven tests clear the tutorial and its checkpoints, the staircase/tall ledges, and the actual 60° and 65° faces. They also preserve full-route checks for all 25 archived Stunt courses. The remaining Trials sections have geometry/spawn checks; **all 30 Trials courses have not been manually cleared end to end**. Difficulty and par times remain candidates for human playtesting.
+The original 80 automated regressions include every Trials spawn and curve, real weight transfer, posture restoration, brakes, throttle pulses, hop gating, ride ripple, interpolation, fault ranking and garage validation. Input-driven tests clear the tutorial and its checkpoints, the staircase/tall ledges, and the actual 60° and 65° faces. They also preserve full-route checks for all 25 archived Stunt courses. The remaining Trials sections have geometry/spawn checks; **all 30 Trials courses have not been manually cleared end to end**. Difficulty and par times remain candidates for human playtesting.
 
 Browser QA completed Balance School with zero faults in 9.65 seconds, showed Platinum, unlocked Rock Crawler, persisted custom jersey/number/equipped bike, and fit all six course cards in a 390×650 viewport without document overflow. Quick Space taps, R fault increments, full restart, and the guide/settings/garage flow are checked through the actual UI.
 
 Use F3 or `?debug=1` for wheel compression, axle drop, tire gap, angular velocity, rider shift and throttle; `?debug=log` additionally logs telemetry. Development diagnostics also expose mode, faults and accepted hop count.
+
+## Torque reaction, weight-snap hops and technical sections
+
+### Drivetrain and grip (`TRIALS_ENGINE` in `src/physics.ts`)
+
+- Engine torque is internal: whatever twists the rear wheel twists the chassis the other way (reaction 1.1). Full gas from rest lifts the front about 40° on flat ground, about 20° with D held, and loops the bike out with A held. On a 55° slope, neutral full gas loops out while gas + D climbs.
+- Torque peaks at 1.5× at zero wheel speed and fades to zero at the wheel-speed ceiling, so short W taps give controlled bursts. Throttle response is 30 ms.
+- Brakes (150 torque, locking) also react into the chassis (0.55), so hard braking dives the nose. A 5 m/s roll stops in 0.30 s; locked brakes plus forward weight hold the bike still on a 45° incline.
+- Tyre friction 5.2, terrain 3.6, obstacles 4.0, bridge planks 2.4, decks 2.6.
+- Engine braking with the throttle closed also reacts into the chassis.
+
+### Weight-snap bunny hop
+
+Hold A on the ground for at least 0.08 s (full preload at 0.32 s), then press D with W held (or throttle above 30%) within 0.32 s. The bike pops up 3.9 to 5.6 m/s, with the rear end getting 1.45× the impulse and the front 0.75×, so the rear kicks up onto a ledge. It shares the 0.55 s cooldown and grounded rule with Space. Without gas, or without the A preload, nothing happens.
+
+### Landings
+
+If the front wheel touches down alone after more than 0.2 s in the air, and the bike is more than 0.5 rad nose-down relative to the surface with more than 6.5 m/s impact speed along the normal, that is a fault (`NOSE-FIRST LANDING`). Rear-first and slope-matched landings are absorbed. The HUD toast shows the crash cause and the fault counter flashes.
+
+### Section catalogue (`src/trials.ts`, 30 m each, four per course)
+
+| Section | Geometry |
+| --- | --- |
+| curbs | 0.28 / 0.45 / 0.6 m blocks |
+| logs | 0.7 / 0.9 / 1.1 m round logs |
+| steps | 0.5 / 1.0 / 1.5 m crate or concrete staircase (height scale capped at 1.06) |
+| ledge | 0.9 and 1.1 m vertical ledges (capped at 1.06) |
+| wall | 5 m-long step-up wall, 1.45 to 1.62 m tall |
+| beam | 9.2 m flexing plank 1.3 m above a pit |
+| seesaw | 9 m teeter-totter resting tipped 0.17 rad toward the rider |
+| bridge | 8 hinged 1.39 m planks hanging with slack between two posts over an 11 m pit |
+| climb55/60/65 | short base transition, then a face whose steepest point is the named angle; small rock bumps on the 55° faces; 45° descent |
+| drop | ramp to a 5 m ledge, then a 1.9 m sheer vertical drop |
+| precision | three 4.4 m pillars, 0.6 / 0.95 / 1.3 m tall, separated by 1.1 m gaps over a pit |
+| rocks | five small rock blocks |
+
+### How the sections were validated
+
+Each section type was checked with focused experiments before being tuned:
+
+- The 1.45 to 1.75 m wall clears from a standstill about 3 m out: an A + gas wheelie held near 40°, then A → D + gas once the front tyre is over the lip.
+- The 1.9 m drop lands cleanly from a held 20° manual; rolling off at 4 m/s or faster endos.
+- The stepped 1.1 m gaps cannot be rolled across at 1.5 to 2.5 m/s with a 0.35 m rise, but a held manual at about 3 m/s carries both.
+
+`tests/trials-bot.ts` combines these techniques into a scripted rider that uses only W/S/A/D. The tests use it to clear an authored example of every section type. The full sweep (`scripts/sweep-trials.ts`) currently clears 88 of the 120 sections (73%); most failures are the scripted rider's limits on ledges and wall exits. **A human has still not ridden every course end to end**, and par times remain estimates.
