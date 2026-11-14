@@ -46,18 +46,19 @@ Open the local URL printed by Vite. `pnpm build` type-checks and produces a stan
 | Brake, then reverse | S / Down |
 | Lean back / backflip | A / Left |
 | Lean forward / frontflip | D / Right |
-| Retry saved checkpoint | R |
-| Restart entire run | Shift + R / toolbar restart |
+| Restart round from the beginning | R / toolbar restart |
 | Pause / resume | P / Escape |
 | Start / retry | Enter / Space |
 
-Touch devices show holdable throttle, brake, and lean buttons. Sound is optional; the toolbar enables a procedural Web Audio engine and explosion sounds. Fullscreen and the controls guide are available in the toolbar/header.
+Touch devices show holdable throttle, brake, and lean buttons. Sound is optional; the toolbar enables a procedural Web Audio engine and explosion sounds. Fullscreen is available in the toolbar. **How to ride** and **Gameplay settings** are tabs at the bottom of the game, including in iframe and fullscreen modes.
+
+Gameplay settings persist in browser storage: Auto/display-refresh rendering or 30/60/120/144 FPS caps; low/medium/high visual quality; blood Off/Low/Medium/High; and screen shake on/off. Blood is off by default and uses stylized red particles on rider crashes. Rendering caps do not change the fixed physics timestep or the timer. Opening a bottom tab during a run pauses the ride; **Resume ride**, P, or Escape resumes it.
 
 ## Course and rules
 
 Level 1, **Redrock Ridge**, includes spline ramps, gaps, a vertical loop, TNT barrels, spinning saws, spike pits, four checkpoints, and a finish gate. Run time determines three stars under 32s, two under 45s, or one under 65s. Each complete airborne 360° rotation earns **−0.5s**, after a clean wheel landing. A short landing confirmation prevents awarding a crash as a clean flip. Partial rotations and riding around the loop do not earn a flip bonus.
 
-Head contact with track geometry crashes immediately. TNT, saws, spikes, and falling out of the course also crash. Crashes detach a six-body jointed ragdoll and emit particles. R restores every bike body's checkpoint pose and velocity, preserving launch momentum. Elapsed time continues; bonuses earned after the saved checkpoint are rolled back. Shift + R clears the entire run. Best completed times persist in browser storage.
+Head contact with track geometry crashes immediately. TNT, saws, spikes, and falling out of the course also crash. Crashes detach a six-body jointed ragdoll and emit particles. **R always starts a fresh round at the original starting line**, clearing the timer, flip bonuses, checkpoint progress, exploded hazards, velocities, and ragdoll. Checkpoints mark progress through the current round. Best completed times and gameplay preferences persist across restarts.
 
 ## Implementation
 
@@ -65,7 +66,8 @@ Head contact with track geometry crashes immediately. TNT, saws, spikes, and fal
 - `src/render.ts`: procedural scenery, extruded track meshes, hazard meshes, rider and ragdoll rendering, shadows, particles, and the camera. The rider and bike dynamics remain locked to Z = 0; mesh thickness adds visual depth.
 - `src/level1.json`: all track control points, hazards, checkpoint locations, loop geometry, spawn, finish, and star thresholds.
 - `src/track.ts`: monotone cubic Hermite ramp sampling and loop generation. `?course=test` loads the flat-ground/single-ramp test course.
-- `src/main.ts`: fixed-step game loop, controls, checkpoint saves, timer, bonuses, pause/retry/results dialogs, accessibility, and responsive HUD.
+- `src/main.ts`: fixed-step game loop, controls, checkpoint progress, timer, bonuses, full-round restarts, pause/results dialogs, accessibility, responsive HUD, and bottom tabs.
+- `src/settings.ts`: validated preferences, blood amount definitions, and rendering-only frame limiting.
 - `src/audio.ts`: browser-generated sound; no downloaded audio assets.
 
 The loop has a crossing at its base. Its incoming and outgoing collision lanes are gated by traversal phase, allowing a strictly 2D bike to pass beneath the exit lane and then follow the full loop. Both lanes are visible throughout.
@@ -92,4 +94,4 @@ pnpm test
 pnpm build
 ```
 
-The physics tests exercise flat-ground settling, ramp traversal, both lean directions, head-strike ragdolls, TNT explosions, full-course completion through the loop, recovery from all four saved checkpoints, and both clean frontflip/backflip scoring. A PD balancing controller drives the actual control inputs in course tests; it does not move or teleport the bike. Browser checks cover model loading, throttle, live timer, crash/retry, pause, help, and mobile layout.
+The regression tests exercise flat-ground settling, ramp traversal, both lean directions, head-strike ragdolls, TNT explosions, full-course completion through the loop, full-round restart, and both clean frontflip/backflip scoring. Rendering tests verify each frame cap, saved-preference validation, and blood amount scaling. A PD balancing controller drives the actual control inputs in course tests; it does not move or teleport the bike. Browser checks cover model loading, throttle, the live timer, R resetting a progressed round, crash blood output, preference persistence, pause/resume, both bottom tabs, and mobile/iframe layouts.

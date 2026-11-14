@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { type Simulation } from './physics';
 import { sampleSegment, loopPoints, type Level, type Point } from './track';
+import { DEFAULT_SETTINGS, bloodParticleCount, type GameSettings } from './settings';
 
 const colors={ink:0x28342f, road:0x485047, dirt:0xa78b78, edge:0xdfd0ad, lime:0xd8ef68, orange:0xfa693e, metal:0x9ba8a1};
 const material=(color:number,roughness=0.8)=>new THREE.MeshStandardMaterial({color,roughness,metalness:0.05});
@@ -46,7 +47,8 @@ export class GameRenderer {
   ragdollMeshes:THREE.Object3D[]=[];
   light=new THREE.DirectionalLight(0xfff4d9,3.2);
   target=new THREE.Vector3(7,3,0);
-  private dust: {mesh:THREE.Mesh;velocity:THREE.Vector3;life:number;max:number}[]=[];
+  private dust: {mesh:THREE.Mesh;velocity:THREE.Vector3;life:number;max:number;blood?:boolean}[]=[];
+  private settings:GameSettings={...DEFAULT_SETTINGS};
   private width=0;private height=0;
   private shake=0;private dustClock=0;
   private resizeObserver:ResizeObserver;
@@ -298,14 +300,51 @@ export class GameRenderer {
   }
 
   reset(){
+    this.clearParticles();this.shake=0;
     for(const group of this.hazardMeshes)group.visible=true;
     for(const group of this.checkpointFlags)(group.children[1] as THREE.Mesh).material=material(0xc5c5ac);
     this.rider.visible=true;
     this.target.set(7,3,0);
   }
 
+  applySettings(settings:GameSettings){
+    this.settings={...settings};
+    this.canvas.dataset.bloodAmount=settings.blood;
+    this.canvas.dataset.frameRate=String(settings.frameRate);
+    const pixelRatio={low:1,medium:1.5,high:2}[settings.quality];
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,pixelRatio));
+    this.renderer.shadowMap.enabled=settings.quality!=='low';
+    const shadowSize=settings.quality==='high'?2048:1024;
+    if(this.light.shadow.mapSize.x!==shadowSize){
+      this.light.shadow.mapSize.set(shadowSize,shadowSize);
+      this.light.shadow.map?.dispose();this.light.shadow.map=null;
+    }
+    if(!settings.screenShake)this.shake=0;
+    if(settings.blood==='off')this.clearParticles(true);
+    this.resize();
+  }
+
+  private clearParticles(bloodOnly=false){
+    for(let i=this.dust.length-1;i>=0;i--){
+      const p=this.dust[i];if(bloodOnly&&!p.blood)continue;
+      this.scene.remove(p.mesh);p.mesh.geometry.dispose();(p.mesh.material as THREE.Material).dispose();this.dust.splice(i,1);
+    }
+    this.canvas.dataset.bloodParticles='0';
+  }
+
+  bloodBurst(x:number,y:number){
+    const count=bloodParticleCount(this.settings.blood);
+    for(let i=0;i<count;i++){
+      const life=0.55+Math.random()*0.6;
+      const obj=mesh(new THREE.SphereGeometry(0.035+Math.random()*0.045,5,4),new THREE.MeshBasicMaterial({color:i%3===0?0x7e202b:0xbb3440,transparent:true}),this.scene,x,y,0.6+Math.random()*0.2);
+      obj.scale.set(0.7,1.4,0.7);
+      this.dust.push({mesh:obj,velocity:new THREE.Vector3((Math.random()-0.5)*7,2+Math.random()*5,0),life,max:life,blood:true});
+    }
+    this.canvas.dataset.bloodParticles=String(count);
+  }
+
   burst(x:number,y:number,color=colors.orange,count=36,speed=7){
-    if(!this.reduced)this.shake=0.24;
+    if(!this.reduced&&this.settings.screenShake)this.shake=0.24;
     for(let i=0;i<count;i++){
       const obj=mesh(new THREE.IcosahedronGeometry(0.06+Math.random()*0.1,0),new THREE.MeshBasicMaterial({color:i%3===0?colors.lime:color,transparent:true}),this.scene,x,y,0.3+Math.random());
       const a=Math.random()*Math.PI*2,life=0.45+Math.random()*0.6;

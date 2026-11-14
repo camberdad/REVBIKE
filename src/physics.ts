@@ -219,5 +219,11 @@ export class Simulation {
   resetHazards() {
     this.exploded.clear();
   }
+  restartRound() {
+    this.flips=0;
+    this.resetHazards();
+    this.spawn(this.level.spawn);
+    this.grounded=false;
+  }
   dispose() {this.events.free();this.world.free();}
 }

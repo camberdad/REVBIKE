@@ -96,6 +96,18 @@ test('TNT collision fires one explosion and one crash',()=>{
   sim.dispose();
 });
 
+test('restarting a round always returns to the starting line and clears hazards, flips, and ragdoll',()=>{
+  const sim=new Simulation(level1);
+  sim.spawn([110,4]);sim.bike.frame.setLinvel({x:18,y:3},true);
+  sim.flips=4;sim.exploded.add(1);sim.crash();
+  sim.restartRound();
+  const p=sim.bike.frame.translation(),v=sim.bike.frame.linvel();
+  assert.ok(Math.abs(p.x-level1.spawn[0])<0.001);assert.ok(Math.abs(p.y-level1.spawn[1])<0.001);
+  assert.equal(v.x,0);assert.equal(v.y,0);assert.equal(sim.flips,0);assert.equal(sim.exploded.size,0);
+  assert.equal(sim.ragdoll.length,0);assert.equal(sim.crashed,false);assert.equal(sim.loopPhase,'approach');
+  sim.dispose();
+});
+
 for(const direction of [1,-1])test(`${direction>0?'backflip':'frontflip'} bonus waits for a clean wheel landing`,()=>{
   const sim=new Simulation(testLevel);sim.spawn([2,12]);
   for(const body of sim.bike.bodies)body.setLinvel({x:8,y:8},true);
