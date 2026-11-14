@@ -17,6 +17,8 @@ export interface Level {
   mechanisms?:Mechanism[]; props?:TrackProp[];
   loops?:NonNullable<Level['loop']>[];
   paths?:Point[][]; magneticPaths?:Point[][];
+  mode?:'trials'|'stunt';
+  obstacles?:{kind:'crate'|'concrete'|'rock'|'log';x:number;y:number;width:number;height:number;radius?:number}[];
 }
 export const level1 = data as Level;
 export const testLevel: Level = {

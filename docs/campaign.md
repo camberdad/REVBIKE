@@ -1,6 +1,8 @@
-# REVBIKE campaign
+# REVBIKE Stunt campaign
 
-All 25 levels are unlocked for testing. Five environment tabs show best times and stars saved separately for each course. Direct links use `?level=N`, with optional `embed=1` or `debug=1`. Gold, Silver and Bronze targets are strict under-time thresholds.
+This is the optional archived Stunt campaign. The default game now has 30 technical Trials tracks; see [Trials design](trials-design.md).
+
+All 25 levels are unlocked for testing. Five environment tabs show best times and stars saved separately for each course. Direct links use `?mode=stunt&level=N`, with optional `embed=1` or `debug=1`. Gold, Silver and Bronze targets are strict under-time thresholds.
 
 | Level | Course | Environment | Gold / Silver / Bronze |
 | --- | --- | --- | --- |

@@ -1,6 +1,6 @@
 # REVBIKE
 
-A browser-based 2.5D dirtbike stunt game made with **Vite, TypeScript, Three.js, and Rapier2D**. Physics runs strictly in X/Y at a fixed 120 Hz; Three.js adds depth, lighting, shadows, and a damped orthographic chase camera.
+A browser-based 2.5D technical dirtbike Trials game with an optional Stunt campaign made with **Vite, TypeScript, Three.js, and Rapier2D**. Physics runs strictly in X/Y at a fixed 120 Hz; Three.js adds depth, lighting, shadows, and a damped orthographic chase camera.
 
 ## Play and embed
 
@@ -13,7 +13,7 @@ Paste this into your website's HTML or Custom HTML block:
 ```html
 <iframe
   src="https://camberdad.github.io/REVBIKE/?embed=1"
-  title="REVBIKE dirtbike stunt game"
+  title="REVBIKE dirtbike Trials game"
   width="100%"
   height="720"
   style="display:block;aspect-ratio:16/9;height:auto;max-width:1600px;border:0"
@@ -23,7 +23,7 @@ Paste this into your website's HTML or Custom HTML block:
 ></iframe>
 ```
 
-The `?embed=1` option fills the iframe with the game and its HUD. Click **LET'S RIDE** inside the game to give it keyboard focus. Use a 16:9 iframe for the same viewport fit as Castle Rangers (1280×720 at the reference viewport); rendering scales to the available size and device pixel ratio. Portrait screens use the full available height. Touch controls appear automatically on touch devices.
+The `?embed=1` option fills the iframe with the game and its HUD. Click **RIDE TRIALS** inside the game to give it keyboard focus. Use a 16:9 iframe for the same viewport fit as Castle Rangers (1280×720 at the reference viewport); rendering scales to the available size and device pixel ratio. Portrait screens use the full available height. Touch controls appear automatically on touch devices.
 
 GitHub Pages deploys automatically from `main` through `.github/workflows/deploy.yml`, after tests and a production build pass. The repository's Pages source is **GitHub Actions**. Assets use relative paths so the bike model, JavaScript, CSS, and favicon work under `/REVBIKE/` and other subdirectories. The built `dist/` can also be hosted on your own web server.
 
@@ -42,32 +42,40 @@ Open the local URL printed by Vite. `pnpm build` type-checks and produces a stan
 
 | Action | Keyboard |
 | --- | --- |
-| Accelerate rear wheel | W / Up |
-| Brake, then reverse | S / Down |
-| Lean back / backflip | A / Left |
-| Lean forward / frontflip | D / Right |
-| Restart round from the beginning | R / toolbar restart |
-| Retry checkpoint, clock keeps running | C / crash dialog |
+| Feather rear-wheel throttle | W / Up |
+| Precision throttle | Shift + W / Up |
+| High-grip brake / hold position | S / Down |
+| Move rider rearward on ground; pitch back in air | A / Left |
+| Move rider forward/crouch on ground; pitch forward in air | D / Right |
+| Bunny hop, grounded only | Space / touch HOP |
+| Instant checkpoint retry; adds one fault | R (C alias) |
+| Full track restart; clears faults and clock | T / Backspace / toolbar restart |
 | Pause / resume | P / Escape |
-| Start / retry | Enter / Space |
+| Start / retry after crash | Enter / Space |
 
-Touch devices show holdable throttle, brake, and lean buttons. Sound is optional; the toolbar enables a procedural Web Audio engine and explosion sounds. Fullscreen is available in the toolbar. **Settings** and **How to ride** are home-menu buttons that open a centered panel with separate tabs and a Back button, including in iframe and fullscreen modes. The toolbar settings button also opens this panel during a ride. The course fills a viewport-fitted 16:9 frame with HUD overlays; the document does not scroll.
+Touch devices show holdable throttle, brake, and lean buttons plus a HOP button. Sound is optional; the toolbar enables a procedural Web Audio engine and explosion sounds. Fullscreen is available in the toolbar. **Settings** and **How to ride** are home-menu buttons that open a centered panel with separate tabs and a Back button, including in iframe and fullscreen modes. The toolbar settings button also opens this panel during a ride. The course fills a viewport-fitted 16:9 frame with HUD overlays; the document does not scroll.
 
-Gameplay settings persist in browser storage: Auto/display-refresh rendering or 30/60/120/144 FPS caps; low/medium/high visual quality; blood Off/Low/Medium/High; and screen shake on/off. Blood is off by default and uses stylized red particles on rider crashes. Rendering caps do not change the fixed physics timestep or the timer. Opening the guide/settings panel during a run pauses the ride; **Back**, **Resume ride**, or Escape resumes it. On the home screen, Back returns to the home menu. R always starts a fresh round, including while a panel is open.
+Gameplay settings persist in browser storage: Auto/display-refresh rendering or 30/60/120/144 FPS caps; low/medium/high visual quality; blood Off/Low/Medium/High; and screen shake on/off. Blood is off by default and uses stylized red particles on rider crashes. Rendering caps do not change the fixed physics timestep or the timer. Opening the guide/settings panel during a run pauses the ride; **Back**, **Resume ride**, or Escape resumes it. On the home screen, Back returns to the home menu. Close an open menu to use ride hotkeys. A checkpoint retry preserves elapsed time; a full restart clears it.
 
 ## Course and rules
 
-The campaign has **25 unlocked courses across five environments**. Level Select has five environment tabs, per-course best times and stars, and Gold/Silver/Bronze targets. Each course has three or four authored stunt sections, two checkpoints and a finish gate. Direct links use `?level=1` through `?level=25`; `?embed=1&level=19` works too. The original course remains at `?course=classic`. [All courses and mechanisms](docs/campaign.md).
+The default **Trials Dirtbike** mode has **30 unlocked technical tracks across five environments**, with three skill sections and two checkpoints per track. Rounded solid logs, crates and ledges, narrow suspended decks, seesaws, 55–65° climbs, controlled drops and small precision gaps replace long launch ramps. Level Select groups six courses per environment and saves fault-first personal bests. Direct links use `?mode=trials&level=1` through `level=30`.
 
-A clean completed flip earns **−0.5s** after a safe landing grace window. Steep takeoffs and sloped landings are accounted for, and a safe suspension rebound keeps the bonus. Loop riding and partial bumps do not score flips. Head/torso contact, active hazards and falling out of bounds trigger a six-body ragdoll crash.
+**Faults rank ahead of time.** Zero faults earns Gold; zero faults at or under the track's par earns Platinum. Up to three faults earns Silver, up to eight Bronze. Crashes count once; pressing R after a crash does not add a second fault. Manual R retries add one fault. R restores the latest checkpoint's bike, rider posture and obstacle state, keeping the elapsed clock running. T / Backspace starts a clean track with zero faults and a new clock.
 
-**R always resets the whole selected round**: time, flip bonuses, both checkpoints, moving decks, broken bridges, explosives, rocks, loop gates and the rider. **C retries the latest checkpoint with the clock running**, restoring the bike and complete mechanism/hazard state. The flip bonus rolls back to its checkpoint value to prevent retry farming. Best times and settings persist.
+Space gives a short, grounded bunny hop. Holding it does not repeat; there is no double jump. Combine a gas pulse and A → D weight movement to climb ledges. Trials uses high low-end torque, strong non-reversing brakes, a lower speed ceiling, larger tires and a longer rear swingarm. Ground lean moves a physical rider mass with horizontal/vertical joints; it does not apply a chassis pitch motor. Air pitch remains responsive and bounded for landing alignment. See [research, tuning and verification](docs/trials-design.md).
+
+The **Garage & Rider** menu saves bike paint, jersey, helmet and rider number. Complete one different Trials track to unlock **Rock Crawler**, and five to unlock **Section R**. Bikes have distinct body additions and engine/grip settings. All tracks remain unlocked for testing.
+
+The original **25-course Stunt campaign** remains at `?mode=stunt`, with its separate arcade physics, saved times, stars and clean-flip −0.5s bonuses. Its five environment tabs, hazards, loops and moving mechanisms remain available. [Stunt courses and mechanisms](docs/campaign.md). The original single course remains at `?course=classic`.
 
 ## Implementation
 
 - `src/physics.ts`: a chassis, two suspension carriers, and two independent circular wheels. Prismatic joints with spring motors provide limited, damped suspension travel. Revolute axle joints allow the wheels to spin. Bike parts do not collide with one another. Terrain uses continuous polylines; CCD protects fast-moving bodies.
 - `src/render.ts`: procedural scenery, extruded track meshes, hazard meshes, rider and ragdoll rendering, shadows, particles, and the camera. The rider and bike dynamics remain locked to Z = 0; mesh thickness adds visual depth.
-- `src/campaign.json`: 25 authored course recipes and medal targets.
+- `src/trials.json` / `src/trials.ts`: 30 technical track recipes, solid obstacles, fault medals and records.
+- `src/garage.ts`: validated rider appearance and earned bike unlocks.
+- `src/campaign.json`: 25 archived Stunt course recipes and medal targets.
 - `src/campaign.ts`: smooth geometry, mechanism placement, checkpoints, props and environment palettes.
 - `src/machines.ts`: seesaws, flex decks, lifts, rollers, belts, spring/boost pads, breakable bridges and magnetic rails.
 - `src/scenery.ts`: procedural scenery and set-piece props for all five environments.
@@ -79,7 +87,7 @@ A clean completed flip earns **−0.5s** after a safe landing grace window. Stee
 
 The loop has a crossing at its base. Its incoming and outgoing collision lanes are gated by traversal phase, allowing a strictly 2D bike to pass beneath the exit lane and then follow the full loop. Both lanes are visible throughout.
 
-Handling settings are grouped in `TUNING` and `BIKE_DIMENSIONS` in `src/physics.ts`: gravity, ground/air torque, a soft spin limit, axle positions and travel, force-based spring stiffness, compression/rebound damping, and friction. The raised chassis settles around 1.14 m with 0.66 m of suspension travel. Sliding forks, a moving swingarm, and a compressible coil follow the real axle bodies.
+Mode-specific handling settings are grouped in `TRIALS_TUNING` / `TRIALS_DIMENSIONS` and the archived `TUNING` / `BIKE_DIMENSIONS` in `src/physics.ts`: gravity, ground/air torque, a soft spin limit, axle positions and travel, force-based spring stiffness, compression/rebound damping, and friction. Trials tires have a 1.24 m rolling diameter, a 2.32 m wheelbase and 0.58 m suspension travel. The archived Stunt chassis settles around 1.14 m with 0.66 m travel. Sliding forks, a moving swingarm, and a compressible coil follow the real axle bodies.
 
 For live suspension compression, axle droop, tire clearance, and angular velocity, press **F3**, use **Gameplay settings → Show rig debug**, or add `?debug=1` to the URL. `?debug=log` adds console reports twice per second. See [the reference inspection, tuning values, measurements, and verification steps](docs/suspension-tuning.md).
 
@@ -103,12 +111,12 @@ pnpm test
 pnpm build
 ```
 
-The regression tests exercise flat-ground settling, ramp traversal, both lean directions, head-strike ragdolls, TNT explosions, full-course completion through the loop, full-round restart, and both clean frontflip/backflip scoring. Rendering tests verify each frame cap, saved-preference validation, and blood amount scaling. A PD balancing controller drives the actual control inputs in course tests; it does not move or teleport the bike. Browser checks cover model loading, throttle, the live timer, R resetting a progressed round, crash blood output, preference persistence, pause/resume, both menu tabs, and desktop/portrait/landscape/iframe layouts.
+The 80 regressions cover Trials spawns/geometry, Space hop gating, real rider mass transfer, snappy brakes, precision throttle, sub-3 mm flat-ground chassis ripple, read-only draw interpolation, fault ranking and garage validation. Input-driven checks clear the tutorial, a staircase and tall ledges, and the authored 60°/65° faces. The archived Stunt suite still drives all 25 full courses, collects their checkpoints and traverses their loops. The full 30-track Trials campaign has not been manually cleared end to end.
+
+Browser checks cover a quick Space tap, R fault increments, T / Backspace resets, a zero-fault tutorial finish, a bike unlock, saved rider appearance, the six-card phone grid, menu tabs, and model loading. `node node_modules/tsx/dist/cli.mjs scripts/measure-trials.ts` repeats the flat-ground/brake measurements.
 
 ## Release versions
 
-A faint version label appears in the lower-right corner of the course, above the status bar. Hover it to see the source commit. Every new GitHub Pages deployment automatically receives `1.2.<GITHUB_RUN_NUMBER>`; the workflow run number increases for every new push or manual deployment. Retrying the same workflow keeps its release number. Local previews show `1.2.0-dev`. The build also publishes `version.json` containing the version and commit for verification. To start a new major/minor release line, change those two components in `package.json`; no manual patch bump is needed.
+A faint version label appears in the lower-right corner of the course, above the status bar. Hover it to see the source commit. Every new GitHub Pages deployment automatically receives `1.3.<GITHUB_RUN_NUMBER>`; the workflow run number increases for every new push or manual deployment. Retrying the same workflow keeps its release number. Local previews show `1.3.0-dev`. The build also publishes `version.json` containing the version and commit for verification. To start a new major/minor release line, change those two components in `package.json`; no manual patch bump is needed.
 
-The arcade camera uses a 19.5 m vertical span on landscape screens (previously 13.5 m), with damped velocity look-ahead in X and a small capped vertical lead. Pitch controls use 90 ground wheelie torque, 72 forward ground torque, 41 backward / 48 forward air torque, and separate 7.2 backward / 8.5 forward rad/s soft limits, and neutral-input angular braking. The spring is 235 N/m with 20/11 compression/rebound damping and 0.12 tire restitution. Tire landings have no impact-speed or pitch-angle ejection threshold; inset head/torso terrain contact, hazards, and falling out of the course cause crashes. The arcade regressions verify standing/throttle wheelies, smooth release braking in both directions, bouncing tire landings from 4/6/9 m, and direct torso crashes.
-
-The campaign tests drive all 25 courses to their finish gates using ordinary throttle/brake/lean inputs, collect both checkpoints, and traverse every authored loop and inverted rail. Dedicated tests cover the moving mechanisms, smooth curve normals, single/double canyon backflips and their clean landing bonuses. A browser playthrough completed First Ride in 36.31 seconds, earned Gold/three stars, and verified the saved time in Level Select after navigating to Level 2.
+The camera now uses a 34 m landscape / 30 m portrait vertical span, with damped velocity look-ahead. Fixed-step vehicle poses interpolate at the render rate to reduce visible stepping. The optional Stunt mode retains its arcade motor and suspension tuning. Tire-first impacts do not eject the rider by impact speed or bike angle; direct head/torso terrain contact, hazards and falling off the course cause crashes.

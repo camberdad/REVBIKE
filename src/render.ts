@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { BIKE_DIMENSIONS, type Simulation } from './physics';
+import { BIKE_DIMENSIONS,TRIALS_DIMENSIONS, type Simulation } from './physics';
 import { sampleSegment, loopPoints, type Level, type Point } from './track';
 import { DEFAULT_SETTINGS, bloodParticleCount, type GameSettings } from './settings';
 import {themeFor} from './campaign';
+import {DEFAULT_APPEARANCE,type Appearance} from './garage';
 import {buildCampaignScenery} from './scenery';
 
 const colors={ink:0x28342f, road:0x485047, dirt:0xa78b78, edge:0xdfd0ad, lime:0xd8ef68, orange:0xfa693e, metal:0x9ba8a1};
@@ -62,8 +63,14 @@ export class GameRenderer {
   private reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   modelReady: Promise<void>;
   modelLoaded=false;
+  private dimensions:typeof BIKE_DIMENSIONS|typeof TRIALS_DIMENSIONS;
+  private paint=material(0xf77b35);private jersey=material(0x3d7467);private helmetPaint=material(0xf4f4e7);
+  private numberPlate?:THREE.Mesh;
+  private bikeExtras:{mesh:THREE.Object3D;bike:string}[]=[];
+  private trialsBody?:{torso:THREE.Mesh;hip:THREE.Mesh;head:THREE.Group;arms:THREE.Mesh[];legs:THREE.Mesh[]};
 
-  constructor(public canvas:HTMLCanvasElement,public level:Level) {
+  constructor(public canvas:HTMLCanvasElement,public level:Level,public appearance:Appearance={...DEFAULT_APPEARANCE}) {
+    this.dimensions=level.mode==='trials'?TRIALS_DIMENSIONS:BIKE_DIMENSIONS;
     this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance'});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFShadowMap;
@@ -75,8 +82,8 @@ export class GameRenderer {
     this.light.shadow.bias=-0.0003;this.light.shadow.normalBias=0.04;
     this.scene.add(this.light,this.light.target);
     if(level.id){const theme=themeFor(level);mats.road.color.setHex(theme.road);mats.dirt.color.setHex(theme.dirt);mats.edge.color.setHex(theme.accent);}
-    this.buildScenery();this.buildTerrain();this.buildBike();this.buildHazards();this.buildMachines();this.buildMarkers();
-    this.modelReady=this.loadBikeModel();
+    this.buildScenery();this.buildTerrain();this.buildObstacles();this.buildBike();this.buildHazards();this.buildMachines();this.buildMarkers();
+    this.applyAppearance(appearance);this.modelReady=this.loadBikeModel();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas.parentElement!);this.resize();
   }
 
@@ -91,19 +98,23 @@ export class GameRenderer {
       this.bike.add(chassis);this.wheels[0].add(rear);this.wheels[1].add(front);
       for(const part of [chassis,rear,front])part.traverse(obj=>{if(obj instanceof THREE.Mesh){obj.castShadow=true;obj.receiveShadow=true;}});
       // Dirt conversion: raised plastics, race plate, and chunky off-road tread.
-      const frontFender=box(chassis,0.86,0.085,0.48,mats.orange,0.98,0.17,0);frontFender.rotation.z=-0.12;
-      const rearFender=box(chassis,0.75,0.075,0.46,mats.orange,-0.86,0.31,0);rearFender.rotation.z=0.08;
-      const plate=mesh(new THREE.PlaneGeometry(0.48,0.36),label('01','#f3f1dd','#28342f',256,192),chassis,0.16,0.3,0.25);plate.rotation.z=-0.16;
-      for(const wheel of [rear,front]){
+      const frontFender=box(chassis,0.96,0.085,0.48,this.paint,this.dimensions.wheelOffsets[1],this.level.mode==='trials'?.72:.17,0);frontFender.rotation.z=-0.12;
+      const rearFender=box(chassis,1,0.075,0.46,this.paint,this.dimensions.wheelOffsets[0]+.12,this.level.mode==='trials'?.76:.31,0);rearFender.rotation.z=0.08;
+      const plate=mesh(new THREE.PlaneGeometry(0.48,0.36),label(String(this.appearance.number).padStart(2,'0'),'#f3f1dd','#28342f',256,192),chassis,0.16,0.3,0.25);plate.rotation.z=-0.16;this.numberPlate=plate;
+      for(const [index,asset] of [rear,front].entries()){
+        const ratio=this.dimensions.wheelRadius/.44;asset.scale.set(ratio,ratio,1);const wheel=this.wheels[index];
         for(let i=0;i<24;i++){
           const a=i/24*Math.PI*2;
           for(const z of [-0.095,0.095]){
-            const treadRadius=BIKE_DIMENSIONS.wheelRadius-0.075/2;
+            const treadRadius=this.dimensions.wheelRadius-0.075/2;
             const tread=box(wheel,0.105,0.075,0.15,mats.tire,Math.cos(a)*treadRadius,Math.sin(a)*treadRadius,z);
             tread.rotation.z=a-Math.PI/2;
           }
         }
       }
+      const guard=box(chassis,1.05,.16,.53,mats.metal,-.1,-.42,.02);this.bikeExtras.push({mesh:guard,bike:'crawler'});
+      const pro=box(chassis,.65,.25,.48,this.paint,.2,.4,.02);pro.rotation.z=-.2;this.bikeExtras.push({mesh:pro,bike:'section'});
+      this.applyAppearance(this.appearance);
       this.modelLoaded=true;this.canvas.dataset.model='cgbike1-dirt-conversion';
     }catch(error){console.warn('Bike model could not load; using procedural dirtbike.',error);}
   }
@@ -111,8 +122,8 @@ export class GameRenderer {
   private buildTerrain() {
     for(const segment of this.level.segments){
       const points=sampleSegment(segment),shape=new THREE.Shape();
-      shape.moveTo(points[0][0],-9);for(const [x,y] of points)shape.lineTo(x,y-0.18);
-      shape.lineTo(points.at(-1)![0],-9);shape.closePath();
+      shape.moveTo(points[0][0],-35);for(const [x,y] of points)shape.lineTo(x,y-0.18);
+      shape.lineTo(points.at(-1)![0],-35);shape.closePath();
       const terrain=mesh(new THREE.ExtrudeGeometry(shape,{depth:1.8,bevelEnabled:false}),mats.dirt,this.scene,0,0,-0.9);
       terrain.receiveShadow=true;
       this.ribbon(points,0.22,mats.road,1.95);
@@ -183,23 +194,33 @@ export class GameRenderer {
     class Coil extends THREE.Curve<THREE.Vector3>{constructor(){super();}getPoint(t:number){const a=t*Math.PI*2*9;return new THREE.Vector3(Math.cos(a)*0.085,t-0.5,Math.sin(a)*0.085);}}
     this.rearSpring=mesh(new THREE.TubeGeometry(new Coil(),110,0.024,5,false),mats.orange,this.scene);
     for(const wheel of this.wheels){
-      const tire=mesh(new THREE.CylinderGeometry(BIKE_DIMENSIONS.wheelRadius,BIKE_DIMENSIONS.wheelRadius,0.3,24),mats.tire,wheel);tire.rotation.x=Math.PI/2;
+      const tire=mesh(new THREE.CylinderGeometry(this.dimensions.wheelRadius,this.dimensions.wheelRadius,0.3,24),mats.tire,wheel);tire.rotation.x=Math.PI/2;
       for(const z of [-0.16,0.16]){
-        mesh(new THREE.TorusGeometry(0.34,0.035,6,24),mats.metal,wheel,0,0,z);
+        const rimRadius=this.dimensions.wheelRadius*.77;
+        mesh(new THREE.TorusGeometry(rimRadius,0.035,6,24),mats.metal,wheel,0,0,z);
         for(let i=0;i<10;i++){
-          const a=i/10*Math.PI*2;rod(wheel,[0,0,z],[Math.cos(a)*0.32,Math.sin(a)*0.32,z],0.012,mats.metal);
+          const a=i/10*Math.PI*2;rod(wheel,[0,0,z],[Math.cos(a)*(rimRadius-.02),Math.sin(a)*(rimRadius-.02),z],0.012,mats.metal);
         }
       }
       for(let i=0;i<20;i++){
-        const a=i/20*Math.PI*2,treadRadius=BIKE_DIMENSIONS.wheelRadius-0.07/2;const tread=box(wheel,0.11,0.07,0.34,mats.tire,Math.cos(a)*treadRadius,Math.sin(a)*treadRadius);tread.rotation.z=a-Math.PI/2;
+        const a=i/20*Math.PI*2,treadRadius=this.dimensions.wheelRadius-0.07/2;const tread=box(wheel,0.11,0.07,0.34,mats.tire,Math.cos(a)*treadRadius,Math.sin(a)*treadRadius);tread.rotation.z=a-Math.PI/2;
       }
       const hub=mesh(new THREE.CylinderGeometry(0.09,0.09,0.4,12),mats.orange,wheel);hub.rotation.x=Math.PI/2;
     }
     // A compact, articulated riding silhouette. The matching physical head sensor sits at the helmet.
     this.buildRider(this.rider);
+    if(this.level.mode!=='trials')this.rider.traverse(obj=>{if(obj instanceof THREE.Mesh){if(obj.material===mats.rider)obj.material=this.jersey;else if(obj.material===mats.orange)obj.material=this.paint;else if(obj.material===mats.white)obj.material=this.helmetPaint;}});
   }
 
   private buildRider(parent:THREE.Group){
+    if(this.level.mode==='trials'){
+      const unit=(r:number,m:THREE.Material)=>rod(parent,[0,0,0],[0,1,0],r,m);
+      const head=new THREE.Group();parent.add(head);const helmet=ball(head,.29,this.helmetPaint,0,0,.04);helmet.scale.set(1.05,1,.95);
+      box(head,.25,.16,.5,mats.ink,.22,0,.05);box(head,.4,.04,.54,this.paint,.25,.17,.04);
+      this.trialsBody={torso:unit(.16,this.jersey),hip:ball(parent,.18,mats.ink),head,arms:[],legs:[]};
+      for(const z of [-.21,.23]){for(let j=0;j<2;j++){const arm=unit(.07,j?mats.ink:this.jersey);arm.position.z=z;this.trialsBody.arms.push(arm);const leg=unit(.09,j?mats.ink:this.jersey);leg.position.z=z;this.trialsBody.legs.push(leg);}box(parent,.3,.13,.15,mats.ink,-.08,-.25,z);}
+      return;
+    }
     rod(parent,[-0.28,0.38,0.04],[-0.2,0.94,0.04],0.18,mats.rider);
     box(parent,0.33,0.25,0.35,mats.orange,-0.21,0.86,0.05).rotation.z=0.18;
     for(const z of [-0.21,0.23]){
@@ -216,6 +237,33 @@ export class GameRenderer {
     box(parent,0.42,0.045,0.54,mats.white,0.2,1.44,0.04).rotation.z=-0.12;
   }
 
+  private updateTrialsRider(shift:number,crouch=0){
+    const body=this.trialsBody;if(!body)return;
+    const connect=(obj:THREE.Mesh,a:number[],b:number[])=>{const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),d=end.clone().sub(start);obj.position.copy(start.add(end).multiplyScalar(.5));obj.scale.y=d.length();obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());};
+    connect(body.torso,[-.25+shift*.55,.42+crouch*.3,.04],[-.2+shift*.8,.94+crouch*.7,.04]);body.hip.position.set(-.25+shift*.55,.42+crouch*.3,.04);body.head.position.set(-.03+shift*.85,1.26+crouch*.9,0);
+    for(let side=0;side<2;side++){const z=side? .23:-.21,knee=[.13+shift*.22,.08,z],elbow=[.18+shift*.45,.67,z];connect(body.legs[side*2],[-.25+shift*.55,.44+crouch*.3,z],knee);connect(body.legs[side*2+1],knee,[-.17,-.23,z]);connect(body.arms[side*2],[-.19+shift*.8,.95+crouch*.7,z],elbow);connect(body.arms[side*2+1],elbow,[.53,.71,z]);}
+  }
+  applyAppearance(appearance:Appearance){
+    this.appearance={...appearance};this.paint.color.set(appearance.paint);this.jersey.color.set(appearance.jersey);this.helmetPaint.color.set(appearance.helmet);
+    for(const extra of this.bikeExtras)extra.mesh.visible=extra.bike===appearance.bike;
+    if(this.numberPlate){const old=this.numberPlate.material as THREE.MeshBasicMaterial;old.map?.dispose();old.dispose();this.numberPlate.material=label(String(appearance.number).padStart(2,'0'),'#f3f1dd','#28342f',256,192);}
+    this.canvas.dataset.bike=appearance.bike;this.canvas.dataset.riderNumber=String(appearance.number);
+  }
+  private buildObstacles(){
+    for(const o of this.level.obstacles??[]){
+      const group=new THREE.Group();group.position.set(o.x,o.y,0);this.scene.add(group);
+      if(o.kind==='log'){
+        const log=mesh(new THREE.CylinderGeometry(o.height/2,o.height/2,1.9,32),material(0x896043),group);log.rotation.x=Math.PI/2;
+        const cut=mesh(new THREE.CircleGeometry(o.height*.43,32),material(0xc49661),group,0,0,.96);
+        for(const r of [.18,.3])mesh(new THREE.TorusGeometry(o.height*r,.015,4,24),material(0x95683d),group,0,0,.98);
+      }else{
+        const mat=material(o.kind==='crate'?0xa8794c:o.kind==='rock'?0x8f8174:0x9ba5a1);
+        box(group,o.width,o.height,1.9,mat);
+        if(o.kind==='crate'){for(const d of [-1,1])rod(group,[-o.width/2,d*o.height/2,.98],[o.width/2,-d*o.height/2,.98],.04,mats.ink);}
+        const edges=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(o.width,o.height,1.93)),new THREE.LineBasicMaterial({color:0xe0d5ba}));group.add(edges);
+      }
+    }
+  }
   private buildScenery(){
     if(this.level.id){buildCampaignScenery(this.scene,this.scenery,this.farScenery,this.level);return;}
     this.scene.add(this.scenery,this.farScenery);
@@ -426,20 +474,20 @@ export class GameRenderer {
   resize(){
     const rect=this.canvas.parentElement!.getBoundingClientRect();this.width=rect.width;this.height=rect.height;
     this.renderer.setSize(this.width,this.height,false);
-    const aspect=this.width/this.height,viewHeight=aspect<1.1?20:19.5;
+    const aspect=this.width/this.height,viewHeight=aspect<1.1?30:34;
     this.camera.left=-viewHeight*aspect/2;this.camera.right=viewHeight*aspect/2;this.camera.top=viewHeight/2;this.camera.bottom=-viewHeight/2;this.camera.updateProjectionMatrix();
   }
 
-  render(sim:Simulation,dt:number,playing:boolean){
-    const {frame,wheels}=sim.bike,p=frame.translation();
-    this.bike.position.set(p.x,p.y,0);this.bike.rotation.z=frame.rotation();
-    const transform=(x:number,y:number,z:number)=>new THREE.Vector3(x,y,z).applyAxisAngle(new THREE.Vector3(0,0,1),frame.rotation()).add(new THREE.Vector3(p.x,p.y,0));
+  render(sim:Simulation,dt:number,playing:boolean,alpha=1){
+    const {frame,wheels}=sim.bike,poses=sim.getRenderPoses(alpha),p=poses[0],angle=p.angle;
+    this.bike.position.set(p.x,p.y,0);this.bike.rotation.z=angle;
+    const transform=(x:number,y:number,z:number)=>new THREE.Vector3(x,y,z).applyAxisAngle(new THREE.Vector3(0,0,1),angle).add(new THREE.Vector3(p.x,p.y,0));
     const connect=(obj:THREE.Mesh,start:THREE.Vector3,end:THREE.Vector3)=>{
       const direction=end.clone().sub(start);obj.position.copy(start.clone().add(end).multiplyScalar(0.5));
       obj.scale.y=direction.length();obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());
     };
     wheels.forEach((wheel,i)=>{
-      const wp=wheel.translation();this.wheels[i].position.set(wp.x,wp.y,0);this.wheels[i].rotation.z=wheel.rotation();
+      const wp=poses[i+1];this.wheels[i].position.set(wp.x,wp.y,0);this.wheels[i].rotation.z=wp.angle;
       const axle=new THREE.Vector3(wp.x,wp.y,0.24);
       if(i===0){
         const pivot=transform(-0.18,-0.2,0.24),upper=transform(-0.43,0.29,0.28);
@@ -455,6 +503,7 @@ export class GameRenderer {
         });
       }
     });
+    this.updateTrialsRider(sim.riderShift,sim.riderCrouch);
     this.syncRagdoll(sim);
     this.hazardMeshes.forEach((group,i)=>{
       const body=sim.hazardBodies[i],p=body.translation();group.position.set(p.x,p.y,0);

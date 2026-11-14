@@ -12,8 +12,17 @@ export const TUNING = { gravity:-22, rearTorque:26, leanTorque:72, wheelieTorque
   groundAngularDamping:1.25, airAngularDamping:0.55, releaseAngularDamping:2.8,
   releasePitchDrag:8, maxAirAngularSpeed:8.5, maxBackwardAngularSpeed:7.2, maxGroundWheelieSpeed:3.5,
   leanResponseTime:0.045, backwardLeanResponseTime:0.06, leanReleaseTime:0.025 };
-export interface Controls { gas: boolean; brake: boolean; left: boolean; right: boolean }
+// Trials uses a larger, longer rig. The archived Stunt setup remains available.
+export const TRIALS_DIMENSIONS={wheelRadius:.62,wheelOffsets:[-1.28,1.04] as const,
+ suspensionAnchorY:-.05,fullDroopAxleY:-.78,fullBumpAxleY:-.20,freeAxleY:-.56};
+export const TRIALS_TUNING={...TUNING,rearTorque:88,leanTorque:0,wheelieTorque:0,airLeanTorque:44,backwardAirTorque:42,airCounterTorque:65,
+ maxWheelSpeed:18,springStiffness:380,compressionDamping:46,reboundDamping:36,wheelFriction:4.2,tireRestitution:.01,
+ groundAngularDamping:1.2,airAngularDamping:1.1,releaseAngularDamping:2,releasePitchDrag:8,maxAirAngularSpeed:4.2,maxBackwardAngularSpeed:4.0,
+ leanResponseTime:.08,backwardLeanResponseTime:.1,leanReleaseTime:.07};
+export interface RenderPose{x:number;y:number;angle:number;}
+export interface Controls { gas: boolean; brake: boolean; left: boolean; right: boolean; precision?:boolean;hop?:boolean }
 export interface Bike {
+  rider?:RAPIER.RigidBody;riderJoint?:RAPIER.PrismaticImpulseJoint;riderVerticalJoint?:RAPIER.PrismaticImpulseJoint;
   frame: RAPIER.RigidBody; wheels: RAPIER.RigidBody[]; carriers: RAPIER.RigidBody[];
   head: RAPIER.Collider; torso: RAPIER.Collider; joints: RAPIER.ImpulseJoint[]; bodies: RAPIER.RigidBody[];
   suspensionJoints: RAPIER.PrismaticImpulseJoint[];
@@ -28,6 +37,7 @@ export interface BikeSnapshot {
   machines?:MachinesSnapshot; clock?:number; loops?:('approach'|'inside'|'complete')[];
   hazards?:{x:number;y:number;vx:number;vy:number;angle:number;spin:number;dynamic:boolean}[];
   activated?:number[];exploded?:number[];fuses?:[number,number][];
+  riderTargets?:{x:number;y:number};
 }
 export class Simulation {
   world: RAPIER.World;
@@ -60,8 +70,21 @@ export class Simulation {
   private fuses=new Map<number,number>();
   campaignLoops:{definition:NonNullable<Level['loop']>;colliders:RAPIER.Collider[];phase:'approach'|'inside'|'complete'}[]=[];
 
+  readonly isTrials:boolean;
+  readonly dimensions:typeof BIKE_DIMENSIONS|typeof TRIALS_DIMENSIONS;
+  tuning:typeof TUNING;
+  throttle=0;
+  riderShift=0;
+  riderCrouch=0;
+  private riderTargetX=-.1;private riderTargetY=-.1;
+  private hopWasDown=false;
+  private hopCooldown=0;
+  hopCount=0;
+  private previousPoses:RenderPose[]=[];
   constructor(public level: Level) {
-    this.world = new RAPIER.World({x:0,y:TUNING.gravity});
+    this.isTrials=level.mode==='trials';this.dimensions=this.isTrials?TRIALS_DIMENSIONS:BIKE_DIMENSIONS;
+    this.tuning={...(this.isTrials?TRIALS_TUNING:TUNING)};
+    this.world = new RAPIER.World({x:0,y:this.tuning.gravity});
     this.world.timestep = STEP;
     this.world.numSolverIterations = 10;
     for (const segment of level.segments) this.addSurface(sampleSegment(segment));
@@ -93,13 +116,19 @@ export class Simulation {
       this.hazards.set(collider.handle,i);
     });
     this.machines=new CourseMachines(this.world,level,this.terrain);
+    for(const obstacle of level.obstacles??[]){
+      const r=obstacle.radius??.09;
+      const collider=this.world.createCollider((obstacle.kind==='log'?RAPIER.ColliderDesc.ball(obstacle.height/2):RAPIER.ColliderDesc.roundCuboid(obstacle.width/2-r,obstacle.height/2-r,r))
+       .setTranslation(obstacle.x,obstacle.y).setFriction(3.5).setRestitution(0).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
+      this.terrain.add(collider.handle);
+    }
     this.spawn(level.spawn);
   }
 
   private addSurface(points: Point[]) {
     // A single polyline avoids internal seam collisions between adjacent ramp pieces.
     const collider=this.world.createCollider(RAPIER.ColliderDesc.polyline(new Float32Array(points.flat()))
-      .setFriction(1.6).setRestitution(0).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
+      .setFriction(this.isTrials?3:1.6).setContactSkin(this.isTrials?.004:0).setRestitution(0).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
     this.terrain.add(collider.handle);
     return collider;
   }
@@ -109,8 +138,8 @@ export class Simulation {
     for (const part of this.ragdoll) this.world.removeRigidBody(part.body);
     this.ragdoll=[];
     const [x,y]=point;
-    const frame=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,y).setCcdEnabled(true).setAngularDamping(TUNING.groundAngularDamping));
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.76,0.17).setMass(3.2).setCollisionGroups(BIKE).setFriction(0.3),frame);
+    const frame=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,y).setCcdEnabled(true).setAngularDamping(this.tuning.groundAngularDamping));
+    this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.76,0.17).setMass(this.isTrials?2:3.2).setCollisionGroups(BIKE).setFriction(0.3),frame);
     const head=this.world.createCollider(RAPIER.ColliderDesc.ball(0.23).setTranslation(-0.03,1.26).setSensor(true)
       .setMass(0).setCollisionGroups(BIKE).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),frame);
     // Inset rider sensors allow a tire-first landing at any impact speed or angle.
@@ -118,37 +147,53 @@ export class Simulation {
     const torso=this.world.createCollider(RAPIER.ColliderDesc.capsule(0.15,0.14).setTranslation(-0.12,0.77).setSensor(true)
       .setMass(0).setCollisionGroups(BIKE).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),frame);
     // Keep the rider's mass above the frame, giving leaning a natural weight transfer.
-    this.world.createCollider(RAPIER.ColliderDesc.ball(0.1).setTranslation(-0.1,0.65).setSensor(true).setMass(0.65).setCollisionGroups(0),frame);
+    if(!this.isTrials)this.world.createCollider(RAPIER.ColliderDesc.ball(0.1).setTranslation(-0.1,0.65).setSensor(true).setMass(0.65).setCollisionGroups(0),frame);
     const wheels: RAPIER.RigidBody[]=[], carriers: RAPIER.RigidBody[]=[], joints: RAPIER.ImpulseJoint[]=[];
     const suspensionJoints:RAPIER.PrismaticImpulseJoint[]=[];
-    const dimensions=BIKE_DIMENSIONS;
+    const dimensions=this.dimensions;
     for (const offset of dimensions.wheelOffsets) {
       const carrier=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x+offset,y+dimensions.freeAxleY));
       this.world.createCollider(RAPIER.ColliderDesc.ball(0.1).setSensor(true).setMass(0.12).setCollisionGroups(0),carrier);
       const wheel=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x+offset,y+dimensions.freeAxleY).setCcdEnabled(true).setAngularDamping(0.05));
-      this.world.createCollider(RAPIER.ColliderDesc.ball(dimensions.wheelRadius).setMass(0.65).setFriction(TUNING.wheelFriction).setRestitution(TUNING.tireRestitution).setCollisionGroups(BIKE)
+      this.world.createCollider(RAPIER.ColliderDesc.ball(dimensions.wheelRadius).setMass(this.isTrials?.7:.65).setFriction(this.tuning.wheelFriction).setRestitution(this.tuning.tireRestitution).setContactSkin(this.isTrials?.006:0).setCollisionGroups(BIKE)
         .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),wheel);
       const suspension=this.world.createImpulseJoint(RAPIER.JointData.prismatic({x:offset,y:dimensions.suspensionAnchorY},{x:0,y:0},{x:0,y:1}),frame,carrier,true) as RAPIER.PrismaticImpulseJoint;
       suspension.setLimits(dimensions.fullDroopAxleY-dimensions.suspensionAnchorY,dimensions.fullBumpAxleY-dimensions.suspensionAnchorY);
       // Lightweight carriers must not scale down the force supporting the rider.
       // Force-based motors give k in force/distance and keep static sag usable.
       suspension.configureMotorModel(RAPIER.MotorModel.ForceBased);
-      suspension.configureMotorPosition(dimensions.freeAxleY-dimensions.suspensionAnchorY,TUNING.springStiffness,TUNING.compressionDamping);
+      suspension.configureMotorPosition(dimensions.freeAxleY-dimensions.suspensionAnchorY,this.tuning.springStiffness,this.tuning.compressionDamping);
       suspension.setContactsEnabled(false);
       const axle=this.world.createImpulseJoint(RAPIER.JointData.revolute({x:0,y:0},{x:0,y:0}),carrier,wheel,true);
       axle.setContactsEnabled(false);
       joints.push(suspension,axle);suspensionJoints.push(suspension);wheels.push(wheel);carriers.push(carrier);
     }
     this.bike={frame,wheels,carriers,head,torso,joints,suspensionJoints,bodies:[frame,...carriers,...wheels]};
+    if(this.isTrials){
+      const carrier=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x-.1,y+.65));
+      this.world.createCollider(RAPIER.ColliderDesc.ball(.1).setMass(.05).setSensor(true).setCollisionGroups(0),carrier);
+      const rider=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x-.1,y+.55).setCcdEnabled(true));
+      this.world.createCollider(RAPIER.ColliderDesc.ball(.18).setMass(3).setSensor(true).setCollisionGroups(0),rider);
+      const joint=this.world.createImpulseJoint(RAPIER.JointData.prismatic({x:0,y:.65},{x:0,y:0},{x:1,y:0}),frame,carrier,true) as RAPIER.PrismaticImpulseJoint;
+      joint.setLimits(-.65,1.6);joint.configureMotorModel(RAPIER.MotorModel.ForceBased);joint.configureMotorPosition(-.1,900,75);joint.setContactsEnabled(false);
+      const vertical=this.world.createImpulseJoint(RAPIER.JointData.prismatic({x:0,y:0},{x:0,y:0},{x:0,y:1}),carrier,rider,true) as RAPIER.PrismaticImpulseJoint;
+      vertical.setLimits(-.42,.12);vertical.configureMotorModel(RAPIER.MotorModel.ForceBased);vertical.configureMotorPosition(-.1,1200,85);vertical.setContactsEnabled(false);
+      this.bike.rider=rider;this.bike.riderJoint=joint;this.bike.riderVerticalJoint=vertical;this.bike.bodies.push(carrier,rider);
+    }
+    this.previousPoses=this.currentPoses();this.throttle=0;this.riderShift=0;this.riderCrouch=0;this.grounded=false;this.hopWasDown=false;this.hopCooldown=0;this.riderTargetX=-.1;this.riderTargetY=-.1;
     this.leanInput=0;
     this.crashed=false; this.airRotation=0; this.airborneTime=0; this.lastAngle=0; this.previousGrounded=true;this.pendingFlip=undefined;
     this.loopPhase=this.level.loop && x>this.level.loop.x+this.level.loop.radius?'complete':'approach';
     this.loopColliders.forEach((collider,i)=>collider.setCollisionGroups(this.loopPhase==='complete'||i===1?0:GROUND));
   }
 
+  private currentPoses():RenderPose[]{return [this.bike.frame,...this.bike.wheels].map(b=>{const p=b.translation();return {x:p.x,y:p.y,angle:b.rotation()};});}
+  getRenderPoses(alpha=1):RenderPose[]{
+    const t=Math.max(0,Math.min(1,alpha));return this.currentPoses().map((p,i)=>{const old=this.previousPoses[i]??p;const delta=Math.atan2(Math.sin(p.angle-old.angle),Math.cos(p.angle-old.angle));return {x:old.x+(p.x-old.x)*t,y:old.y+(p.y-old.y)*t,angle:old.angle+delta*t};});
+  }
   getSuspensionTelemetry():SuspensionTelemetry[]{
     const {frame,wheels}=this.bike,p=frame.translation(),v=frame.linvel(),omega=frame.angvel(),angle=frame.rotation();
-    const c=Math.cos(angle),s=Math.sin(angle),d=BIKE_DIMENSIONS;
+    const c=Math.cos(angle),s=Math.sin(angle),d=this.dimensions;
     return wheels.map((wheel,i)=>{
       const wp=wheel.translation(),wv=wheel.linvel(),dx=wp.x-p.x,dy=wp.y-p.y;
       const axleY=-s*dx+c*dy;
@@ -157,12 +202,12 @@ export class Simulation {
       const travel=d.fullBumpAxleY-d.fullDroopAxleY,compression=axleY-d.fullDroopAxleY;
       return {wheel:i===0?'rear':'front',axleDrop:-axleY,compression,springCompression:d.freeAxleY<axleY?axleY-d.freeAxleY:0,
         travel,compressionRatio:Math.max(0,Math.min(1,compression/travel)),compressionVelocity:-s*relativeX+c*relativeY,
-        tireClearance:(i===0?0.2725:0.1275)-(axleY+Math.hypot(d.wheelRadius,0.055))};
+        tireClearance:(this.isTrials?(i===0?.72:.68):(i===0?.2725:.1275))-(axleY+Math.hypot(d.wheelRadius,0.055))};
     });
   }
 
   captureCheckpoint(): BikeSnapshot {
-    return {loopPhase:this.loopPhase,machines:this.machines.capture(),clock:this.clock,loops:this.campaignLoops.map(l=>l.phase),
+    return {riderTargets:this.isTrials?{x:this.riderTargetX,y:this.riderTargetY}:undefined,loopPhase:this.loopPhase,machines:this.machines.capture(),clock:this.clock,loops:this.campaignLoops.map(l=>l.phase),
       hazards:this.hazardBodies.map(b=>{const p=b.translation(),v=b.linvel();return {x:p.x,y:p.y,vx:v.x,vy:v.y,angle:b.rotation(),spin:b.angvel(),dynamic:b.isDynamic()};}),activated:[...this.hazardActivated],exploded:[...this.exploded],fuses:[...this.fuses],bodies:this.bike.bodies.map(body=>{
       const p=body.translation(),v=body.linvel();
       return {x:p.x,y:p.y,angle:body.rotation(),vx:v.x,vy:v.y,spin:body.angvel()};
@@ -179,11 +224,18 @@ export class Simulation {
       const body=this.bike.bodies[i];body.setTranslation({x:saved.x,y:saved.y},true);body.setRotation(saved.angle,true);
       body.setLinvel({x:saved.vx,y:saved.vy},true);body.setAngvel(saved.spin,true);
     });
+    if(this.isTrials&&snapshot.riderTargets){
+      this.riderTargetX=snapshot.riderTargets.x;this.riderTargetY=snapshot.riderTargets.y;
+      this.bike.riderJoint!.configureMotorPosition(this.riderTargetX,900,75);
+      this.bike.riderVerticalJoint!.configureMotorPosition(this.riderTargetY,1200,85);
+    }
+    this.previousPoses=this.currentPoses();
     this.lastAngle=snapshot.bodies[0].angle;this.loopPhase=snapshot.loopPhase;
     this.loopColliders.forEach((collider,i)=>collider.setCollisionGroups(snapshot.loopPhase==='complete'||(i===1 && snapshot.loopPhase==='approach')?0:GROUND));
   }
 
   step(input: Controls) {
+    this.previousPoses=this.currentPoses();
     this.clock+=STEP;
     this.updateHazards();
     for(const loop of this.campaignLoops){
@@ -204,14 +256,37 @@ export class Simulation {
     }
     if (!this.crashed) {
       const {frame,wheels}=this.bike;
+      this.hopCooldown=Math.max(0,this.hopCooldown-STEP);
+      if(input.hop&&!this.hopWasDown&&this.grounded&&this.hopCooldown===0){
+        for(const body of this.bike.bodies)body.applyImpulse({x:input.gas?body.mass()*1.2:0,y:body.mass()*6.2},true);
+        this.hopCooldown=.55;this.hopCount++;
+      }
+      this.hopWasDown=!!input.hop;
       this.machines.step(this.bike);
       for(const rail of this.magneticRails){const done=this.machines.magnetDone.has(rail.index),progress=this.machines.magnetProgress[rail.index]??0;rail.colliders[0].setCollisionGroups(done?0:GROUND);rail.colliders[1].setCollisionGroups(!done&&progress>75?GROUND:0);}
-      const d=BIKE_DIMENSIONS;
+      const d=this.dimensions;
       for(const [i,wheel] of this.getSuspensionTelemetry().entries()){
-        this.bike.suspensionJoints[i].configureMotorPosition(d.freeAxleY-d.suspensionAnchorY,TUNING.springStiffness,
-          wheel.compressionVelocity>0?TUNING.compressionDamping:TUNING.reboundDamping);
+        this.bike.suspensionJoints[i].configureMotorPosition(d.freeAxleY-d.suspensionAnchorY,this.tuning.springStiffness,
+          wheel.compressionVelocity>0?this.tuning.compressionDamping:this.tuning.reboundDamping);
       }
-      if (input.gas && wheels[0].angvel()>-TUNING.maxWheelSpeed) wheels[0].applyTorqueImpulse(-TUNING.rearTorque*STEP,true);
+      if(this.isTrials){
+        const demand=input.gas?(input.precision?.38:1):0;
+        this.throttle+=(demand-this.throttle)*(1-Math.exp(-STEP/.035));
+        if(this.throttle>.005&&wheels[0].angvel()>-this.tuning.maxWheelSpeed*(input.precision?.4:1))wheels[0].applyTorqueImpulse(-this.tuning.rearTorque*this.throttle*STEP,true);
+        if(!input.gas)wheels[0].applyTorqueImpulse(-wheels[0].angvel()*.6*STEP,true);
+        if(input.brake)for(const wheel of wheels){const w=wheel.angvel();wheel.applyTorqueImpulse(Math.max(-140*STEP,Math.min(140*STEP,-w*.164)),true);}
+        const shift=Number(input.right)-Number(input.left),incline=Math.max(0,Math.min(1,(frame.rotation()-.15)/.55));
+        this.riderTargetX+=((this.grounded?(shift>0?.45+incline*1.05:shift<0?-.62:-.1):this.riderTargetX)-this.riderTargetX)*(1-Math.exp(-STEP/.16));
+        this.riderTargetY+=((this.grounded?(shift>0?-.2-incline*.2:shift<0?.1:-.1):this.riderTargetY)-this.riderTargetY)*(1-Math.exp(-STEP/.18));
+        this.bike.riderJoint!.configureMotorPosition(this.riderTargetX,900,75);
+        this.bike.riderVerticalJoint!.configureMotorPosition(this.riderTargetY,1200,85);
+        const rp=this.bike.rider!.translation(),fp=frame.translation(),angle=frame.rotation();
+        this.riderCrouch=-Math.sin(angle)*(rp.x-fp.x)+Math.cos(angle)*(rp.y-fp.y)-.65;
+        this.riderShift=Math.cos(angle)*(rp.x-fp.x)+Math.sin(angle)*(rp.y-fp.y)+.1;
+        this.bike.head.setTranslationWrtParent({x:-.03+this.riderShift*.85,y:1.26+this.riderCrouch*.9});
+        this.bike.torso.setTranslationWrtParent({x:-.12+this.riderShift*.65,y:.77+this.riderCrouch*.6});
+      }else{
+      if (input.gas && wheels[0].angvel()>-this.tuning.maxWheelSpeed) wheels[0].applyTorqueImpulse(-this.tuning.rearTorque*STEP,true);
       if (input.brake) {
         for (const wheel of wheels) {
           const speed=wheel.angvel();
@@ -219,21 +294,23 @@ export class Simulation {
           wheel.applyTorqueImpulse(torque*STEP,true);
         }
       }
+      }
       const lean=Number(input.left)-Number(input.right),airborne=!this.grounded&&this.airborneTime>0.04;
-      this.leanInput+=(lean-this.leanInput)*(1-Math.exp(-STEP/(lean>0?TUNING.backwardLeanResponseTime:lean<0?TUNING.leanResponseTime:TUNING.leanReleaseTime)));
-      frame.setAngularDamping(lean?(airborne?TUNING.airAngularDamping:TUNING.groundAngularDamping):TUNING.releaseAngularDamping);
+      this.leanInput+=(lean-this.leanInput)*(1-Math.exp(-STEP/(lean>0?this.tuning.backwardLeanResponseTime:lean<0?this.tuning.leanResponseTime:this.tuning.leanReleaseTime)));
+      frame.setAngularDamping(lean?(airborne?this.tuning.airAngularDamping:this.tuning.groundAngularDamping):this.tuning.releaseAngularDamping);
       const omega=frame.angvel();
-      let torque=this.leanInput*(airborne?(this.leanInput*omega<0?TUNING.airCounterTorque:this.leanInput>0?TUNING.backwardAirTorque:TUNING.airLeanTorque):this.leanInput>0?TUNING.wheelieTorque:TUNING.leanTorque);
+      let torque=this.leanInput*(airborne?(this.leanInput*omega<0?this.tuning.airCounterTorque:this.leanInput>0?this.tuning.backwardAirTorque:this.tuning.airLeanTorque):this.leanInput>0?this.tuning.wheelieTorque:this.tuning.leanTorque);
       // Frame damping alone cannot stop the angular momentum of the whole rig.
       // A light chassis brake also slows the orbiting axles, never wheel spin.
-      if(!lean&&!this.machines.magnetic)torque-=omega*TUNING.releasePitchDrag;
+      if(!lean&&!this.machines.magnetic)torque-=omega*this.tuning.releasePitchDrag;
       if(this.machines.magnetic)torque=0;
-      const limit=omega>0?(airborne?TUNING.maxBackwardAngularSpeed:TUNING.maxGroundWheelieSpeed):TUNING.maxAirAngularSpeed;
+      const limit=omega>0?(airborne?this.tuning.maxBackwardAngularSpeed:this.tuning.maxGroundWheelieSpeed):this.tuning.maxAirAngularSpeed;
       if((airborne||lean>0)&&torque*omega>0)torque*=Math.max(0,Math.min(1,(limit-Math.abs(omega))/1.5));
       if(airborne&&Math.abs(omega)>limit)torque-=Math.sign(omega)*(Math.abs(omega)-limit)*8;
-      frame.applyTorqueImpulse(torque*STEP,true);
+      if(!this.isTrials||airborne)frame.applyTorqueImpulse(torque*STEP,true);
       const speed=frame.linvel();
-      if (Math.abs(speed.x)>29) frame.applyImpulse({x:-Math.sign(speed.x)*(Math.abs(speed.x)-29)*14*STEP,y:0},true);
+      const speedLimit=this.isTrials?11.5:29;
+      if(Math.abs(speed.x)>speedLimit)frame.applyImpulse({x:-Math.sign(speed.x)*(Math.abs(speed.x)-speedLimit)*14*STEP,y:0},true);
     }
     this.world.step(this.events);
     let crashRequested=false;
@@ -349,6 +426,7 @@ export class Simulation {
   }
   restartRound() {
     this.flips=0;
+    this.hopCount=0;
     this.resetHazards();
     this.spawn(this.level.spawn);
     this.grounded=false;

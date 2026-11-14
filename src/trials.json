@@ -1,0 +1,302 @@
+[
+  {
+    "id": 1,
+    "name": "Balance School",
+    "pieces": [
+      "curbs",
+      "beam",
+      "drop"
+    ],
+    "par": 45
+  },
+  {
+    "id": 2,
+    "name": "Farm Log Trial",
+    "pieces": [
+      "logs",
+      "curbs",
+      "precision"
+    ],
+    "par": 50
+  },
+  {
+    "id": 3,
+    "name": "Crate Staircase",
+    "pieces": [
+      "steps",
+      "ledge",
+      "drop"
+    ],
+    "par": 55
+  },
+  {
+    "id": 4,
+    "name": "Hill Control",
+    "pieces": [
+      "curbs",
+      "climb55",
+      "precision"
+    ],
+    "par": 60
+  },
+  {
+    "id": 5,
+    "name": "The Narrow Way",
+    "pieces": [
+      "seesaw",
+      "beam",
+      "rocks"
+    ],
+    "par": 65
+  },
+  {
+    "id": 6,
+    "name": "Country Sections",
+    "pieces": [
+      "ledge",
+      "climb60",
+      "precision"
+    ],
+    "par": 70
+  },
+  {
+    "id": 7,
+    "name": "Concrete Basics",
+    "pieces": [
+      "curbs",
+      "beam",
+      "drop"
+    ],
+    "par": 53
+  },
+  {
+    "id": 8,
+    "name": "Pipe Control",
+    "pieces": [
+      "logs",
+      "curbs",
+      "precision"
+    ],
+    "par": 58
+  },
+  {
+    "id": 9,
+    "name": "Loading Dock",
+    "pieces": [
+      "steps",
+      "ledge",
+      "drop"
+    ],
+    "par": 63
+  },
+  {
+    "id": 10,
+    "name": "Steel Ascent",
+    "pieces": [
+      "curbs",
+      "climb55",
+      "precision"
+    ],
+    "par": 68
+  },
+  {
+    "id": 11,
+    "name": "Girder Balance",
+    "pieces": [
+      "seesaw",
+      "beam",
+      "rocks"
+    ],
+    "par": 73
+  },
+  {
+    "id": 12,
+    "name": "Yard Expert",
+    "pieces": [
+      "ledge",
+      "climb60",
+      "precision"
+    ],
+    "par": 78
+  },
+  {
+    "id": 13,
+    "name": "Rock Garden",
+    "pieces": [
+      "curbs",
+      "beam",
+      "drop"
+    ],
+    "par": 61
+  },
+  {
+    "id": 14,
+    "name": "Timber Steps",
+    "pieces": [
+      "logs",
+      "curbs",
+      "precision"
+    ],
+    "par": 66
+  },
+  {
+    "id": 15,
+    "name": "Canyon Ledges",
+    "pieces": [
+      "steps",
+      "ledge",
+      "drop"
+    ],
+    "par": 71
+  },
+  {
+    "id": 16,
+    "name": "The 60-Degree Climb",
+    "pieces": [
+      "curbs",
+      "climb60",
+      "precision"
+    ],
+    "par": 76
+  },
+  {
+    "id": 17,
+    "name": "Mine Balance",
+    "pieces": [
+      "seesaw",
+      "beam",
+      "rocks"
+    ],
+    "par": 81
+  },
+  {
+    "id": 18,
+    "name": "Rockface Expert",
+    "pieces": [
+      "ledge",
+      "climb60",
+      "precision"
+    ],
+    "par": 86
+  },
+  {
+    "id": 19,
+    "name": "Factory Control",
+    "pieces": [
+      "curbs",
+      "beam",
+      "drop"
+    ],
+    "par": 69
+  },
+  {
+    "id": 20,
+    "name": "Reactor Steps",
+    "pieces": [
+      "logs",
+      "curbs",
+      "precision"
+    ],
+    "par": 74
+  },
+  {
+    "id": 21,
+    "name": "Metal Shelves",
+    "pieces": [
+      "steps",
+      "ledge",
+      "drop"
+    ],
+    "par": 79
+  },
+  {
+    "id": 22,
+    "name": "Piston Incline",
+    "pieces": [
+      "curbs",
+      "climb60",
+      "precision"
+    ],
+    "par": 84
+  },
+  {
+    "id": 23,
+    "name": "Floating Catwalk",
+    "pieces": [
+      "seesaw",
+      "beam",
+      "rocks"
+    ],
+    "par": 89
+  },
+  {
+    "id": 24,
+    "name": "Precision Circuit",
+    "pieces": [
+      "ledge",
+      "climb60",
+      "precision"
+    ],
+    "par": 94
+  },
+  {
+    "id": 25,
+    "name": "Obsidian Basics",
+    "pieces": [
+      "curbs",
+      "beam",
+      "drop"
+    ],
+    "par": 77
+  },
+  {
+    "id": 26,
+    "name": "Lava Logs",
+    "pieces": [
+      "logs",
+      "curbs",
+      "precision"
+    ],
+    "par": 82
+  },
+  {
+    "id": 27,
+    "name": "Basalt Ledges",
+    "pieces": [
+      "steps",
+      "ledge",
+      "drop"
+    ],
+    "par": 87
+  },
+  {
+    "id": 28,
+    "name": "The 65-Degree Face",
+    "pieces": [
+      "curbs",
+      "climb65",
+      "precision"
+    ],
+    "par": 92
+  },
+  {
+    "id": 29,
+    "name": "Ashwood Balance",
+    "pieces": [
+      "seesaw",
+      "beam",
+      "rocks"
+    ],
+    "par": 97
+  },
+  {
+    "id": 30,
+    "name": "The Ultimate Trials Section",
+    "pieces": [
+      "ledge",
+      "climb60",
+      "precision"
+    ],
+    "par": 102
+  }
+]
