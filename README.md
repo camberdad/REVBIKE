@@ -72,7 +72,7 @@ Head contact with track geometry crashes immediately. TNT, saws, spikes, and fal
 
 The loop has a crossing at its base. Its incoming and outgoing collision lanes are gated by traversal phase, allowing a strictly 2D bike to pass beneath the exit lane and then follow the full loop. Both lanes are visible throughout.
 
-Handling settings are grouped in `TUNING` and `BIKE_DIMENSIONS` in `src/physics.ts`: gravity, ground/air torque, a soft spin limit, axle positions and travel, force-based spring stiffness, compression/rebound damping, and friction. The raised chassis settles around 1.11 m with 0.66 m of suspension travel. Sliding forks, a moving swingarm, and a compressible coil follow the real axle bodies.
+Handling settings are grouped in `TUNING` and `BIKE_DIMENSIONS` in `src/physics.ts`: gravity, ground/air torque, a soft spin limit, axle positions and travel, force-based spring stiffness, compression/rebound damping, and friction. The raised chassis settles around 1.14 m with 0.66 m of suspension travel. Sliding forks, a moving swingarm, and a compressible coil follow the real axle bodies.
 
 For live suspension compression, axle droop, tire clearance, and angular velocity, press **F3**, use **Gameplay settings → Show rig debug**, or add `?debug=1` to the URL. `?debug=log` adds console reports twice per second. See [the reference inspection, tuning values, measurements, and verification steps](docs/suspension-tuning.md).
 
@@ -97,3 +97,9 @@ pnpm build
 ```
 
 The regression tests exercise flat-ground settling, ramp traversal, both lean directions, head-strike ragdolls, TNT explosions, full-course completion through the loop, full-round restart, and both clean frontflip/backflip scoring. Rendering tests verify each frame cap, saved-preference validation, and blood amount scaling. A PD balancing controller drives the actual control inputs in course tests; it does not move or teleport the bike. Browser checks cover model loading, throttle, the live timer, R resetting a progressed round, crash blood output, preference persistence, pause/resume, both menu tabs, and desktop/portrait/landscape/iframe layouts.
+
+## Release versions
+
+A faint version label appears in the lower-right corner of the course, above the status bar. Hover it to see the source commit. Every new GitHub Pages deployment automatically receives `1.1.<GITHUB_RUN_NUMBER>`; the workflow run number increases for every new push or manual deployment. Retrying the same workflow keeps its release number. Local previews show `1.1.0-dev`. The build also publishes `version.json` containing the version and commit for verification. To start a new major/minor release line, change those two components in `package.json`; no manual patch bump is needed.
+
+The arcade camera uses a 19.5 m vertical span on landscape screens (previously 13.5 m), with damped velocity look-ahead in X and a small capped vertical lead. Pitch controls use 96 ground wheelie torque, 72 forward ground torque, 48 air torque, a soft 8.5 rad/s spin limit, and neutral-input angular braking. The spring is 235 N/m with 20/11 compression/rebound damping and 0.12 tire restitution. Tire landings have no impact-speed or pitch-angle ejection threshold; inset head/torso terrain contact, hazards, and falling out of the course cause crashes. The arcade regressions verify standing/throttle wheelies, smooth release braking in both directions, bouncing tire landings from 4/6/9 m, and direct torso crashes.

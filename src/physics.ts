@@ -6,13 +6,14 @@ export const STEP = 1/120;
 const BIKE = 0x00010002, GROUND = 0x00020001;
 export const BIKE_DIMENSIONS = {wheelRadius:0.44, wheelOffsets:[-0.94,0.94] as const,
   suspensionAnchorY:-0.22, fullDroopAxleY:-1.0, fullBumpAxleY:-0.34, freeAxleY:-0.88};
-export const TUNING = { gravity:-22, rearTorque:26, leanTorque:42, airLeanTorque:36, airCounterTorque:42, maxWheelSpeed:76,
-  springStiffness:210, compressionDamping:28, reboundDamping:18, wheelFriction:1.9,
-  groundAngularDamping:1.25, airAngularDamping:0.45, maxAirAngularSpeed:7.5, leanResponseTime:0.075 };
+export const TUNING = { gravity:-22, rearTorque:26, leanTorque:72, wheelieTorque:96, airLeanTorque:48, airCounterTorque:56, maxWheelSpeed:76,
+  springStiffness:235, compressionDamping:20, reboundDamping:11, wheelFriction:1.9, tireRestitution:0.12,
+  groundAngularDamping:1.25, airAngularDamping:0.55, releaseAngularDamping:2.8,
+  releasePitchDrag:8, maxAirAngularSpeed:8.5, leanResponseTime:0.045, leanReleaseTime:0.025 };
 export interface Controls { gas: boolean; brake: boolean; left: boolean; right: boolean }
 export interface Bike {
   frame: RAPIER.RigidBody; wheels: RAPIER.RigidBody[]; carriers: RAPIER.RigidBody[];
-  head: RAPIER.Collider; joints: RAPIER.ImpulseJoint[]; bodies: RAPIER.RigidBody[];
+  head: RAPIER.Collider; torso: RAPIER.Collider; joints: RAPIER.ImpulseJoint[]; bodies: RAPIER.RigidBody[];
   suspensionJoints: RAPIER.PrismaticImpulseJoint[];
 }
 export interface SuspensionTelemetry {
@@ -85,7 +86,11 @@ export class Simulation {
     const [x,y]=point;
     const frame=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,y).setCcdEnabled(true).setAngularDamping(TUNING.groundAngularDamping));
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.76,0.17).setMass(3.2).setCollisionGroups(BIKE).setFriction(0.3),frame);
-    const head=this.world.createCollider(RAPIER.ColliderDesc.ball(0.27).setTranslation(-0.03,1.26).setSensor(true)
+    const head=this.world.createCollider(RAPIER.ColliderDesc.ball(0.23).setTranslation(-0.03,1.26).setSensor(true)
+      .setMass(0).setCollisionGroups(BIKE).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),frame);
+    // Inset rider sensors allow a tire-first landing at any impact speed or angle.
+    // Only actual head/torso contact with terrain detaches the rider.
+    const torso=this.world.createCollider(RAPIER.ColliderDesc.capsule(0.15,0.14).setTranslation(-0.12,0.77).setSensor(true)
       .setMass(0).setCollisionGroups(BIKE).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),frame);
     // Keep the rider's mass above the frame, giving leaning a natural weight transfer.
     this.world.createCollider(RAPIER.ColliderDesc.ball(0.1).setTranslation(-0.1,0.65).setSensor(true).setMass(0.65).setCollisionGroups(0),frame);
@@ -96,7 +101,7 @@ export class Simulation {
       const carrier=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x+offset,y+dimensions.freeAxleY));
       this.world.createCollider(RAPIER.ColliderDesc.ball(0.1).setSensor(true).setMass(0.12).setCollisionGroups(0),carrier);
       const wheel=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x+offset,y+dimensions.freeAxleY).setCcdEnabled(true).setAngularDamping(0.05));
-      this.world.createCollider(RAPIER.ColliderDesc.ball(dimensions.wheelRadius).setMass(0.65).setFriction(TUNING.wheelFriction).setRestitution(0).setCollisionGroups(BIKE)
+      this.world.createCollider(RAPIER.ColliderDesc.ball(dimensions.wheelRadius).setMass(0.65).setFriction(TUNING.wheelFriction).setRestitution(TUNING.tireRestitution).setCollisionGroups(BIKE)
         .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),wheel);
       const suspension=this.world.createImpulseJoint(RAPIER.JointData.prismatic({x:offset,y:dimensions.suspensionAnchorY},{x:0,y:0},{x:0,y:1}),frame,carrier,true) as RAPIER.PrismaticImpulseJoint;
       suspension.setLimits(dimensions.fullDroopAxleY-dimensions.suspensionAnchorY,dimensions.fullBumpAxleY-dimensions.suspensionAnchorY);
@@ -109,7 +114,7 @@ export class Simulation {
       axle.setContactsEnabled(false);
       joints.push(suspension,axle);suspensionJoints.push(suspension);wheels.push(wheel);carriers.push(carrier);
     }
-    this.bike={frame,wheels,carriers,head,joints,suspensionJoints,bodies:[frame,...carriers,...wheels]};
+    this.bike={frame,wheels,carriers,head,torso,joints,suspensionJoints,bodies:[frame,...carriers,...wheels]};
     this.leanInput=0;
     this.crashed=false; this.airRotation=0; this.airborneTime=0; this.lastAngle=0; this.previousGrounded=true;this.pendingFlip=undefined;
     this.loopPhase=this.level.loop && x>this.level.loop.x+this.level.loop.radius?'complete':'approach';
@@ -176,10 +181,13 @@ export class Simulation {
         }
       }
       const lean=Number(input.left)-Number(input.right),airborne=!this.grounded&&this.airborneTime>0.04;
-      this.leanInput+=(lean-this.leanInput)*(1-Math.exp(-STEP/TUNING.leanResponseTime));
-      frame.setAngularDamping(airborne?TUNING.airAngularDamping:TUNING.groundAngularDamping);
+      this.leanInput+=(lean-this.leanInput)*(1-Math.exp(-STEP/(lean?TUNING.leanResponseTime:TUNING.leanReleaseTime)));
+      frame.setAngularDamping(lean?(airborne?TUNING.airAngularDamping:TUNING.groundAngularDamping):TUNING.releaseAngularDamping);
       const omega=frame.angvel();
-      let torque=this.leanInput*(airborne?(this.leanInput*omega<0?TUNING.airCounterTorque:TUNING.airLeanTorque):TUNING.leanTorque);
+      let torque=this.leanInput*(airborne?(this.leanInput*omega<0?TUNING.airCounterTorque:TUNING.airLeanTorque):this.leanInput>0?TUNING.wheelieTorque:TUNING.leanTorque);
+      // Frame damping alone cannot stop the angular momentum of the whole rig.
+      // A light chassis brake also slows the orbiting axles, never wheel spin.
+      if(!lean)torque-=omega*TUNING.releasePitchDrag;
       if(airborne&&torque*omega>0)torque*=Math.max(0,Math.min(1,(TUNING.maxAirAngularSpeed-Math.abs(omega))/1.5));
       if(airborne&&Math.abs(omega)>TUNING.maxAirAngularSpeed)torque-=Math.sign(omega)*(Math.abs(omega)-TUNING.maxAirAngularSpeed)*8;
       frame.applyTorqueImpulse(torque*STEP,true);
@@ -190,8 +198,8 @@ export class Simulation {
     let crashRequested=false;
     this.events.drainCollisionEvents((a,b,started) => {
       if (!started || this.crashed) return;
-      const head=this.bike.head.handle;
-      if ((a===head && this.terrain.has(b)) || (b===head && this.terrain.has(a))) crashRequested=true;
+      const rider=[this.bike.head.handle,this.bike.torso.handle];
+      if ((rider.includes(a) && this.terrain.has(b)) || (rider.includes(b) && this.terrain.has(a))) crashRequested=true;
       const hazardIndex=this.hazards.get(a) ?? this.hazards.get(b);
       if (hazardIndex!==undefined && !this.exploded.has(hazardIndex)) {
         if (this.level.hazards[hazardIndex].type==='tnt') {
@@ -237,6 +245,7 @@ export class Simulation {
     this.crashed=true;
     const {frame,head}=this.bike;
     head.setCollisionGroups(0);
+    this.bike.torso.setCollisionGroups(0);
     const p=frame.translation(), angle=frame.rotation(), v=frame.linvel();
     const local=(x:number,y:number)=>({x:p.x+x*Math.cos(angle)-y*Math.sin(angle),y:p.y+x*Math.sin(angle)+y*Math.cos(angle)});
     const parts=[{x:-0.03,y:1.26,length:0.48,kind:'head' as const},{x:-0.12,y:0.77,length:0.65,kind:'torso' as const},

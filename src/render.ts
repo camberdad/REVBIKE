@@ -380,7 +380,7 @@ export class GameRenderer {
   resize(){
     const rect=this.canvas.parentElement!.getBoundingClientRect();this.width=rect.width;this.height=rect.height;
     this.renderer.setSize(this.width,this.height,false);
-    const aspect=this.width/this.height,viewHeight=aspect<1.1?16:13.5;
+    const aspect=this.width/this.height,viewHeight=aspect<1.1?20:19.5;
     this.camera.left=-viewHeight*aspect/2;this.camera.right=viewHeight*aspect/2;this.camera.top=viewHeight/2;this.camera.bottom=-viewHeight/2;this.camera.updateProjectionMatrix();
   }
 
@@ -426,8 +426,10 @@ export class GameRenderer {
       (particle.mesh.material as THREE.MeshBasicMaterial).opacity=Math.max(0,particle.life/particle.max);particle.mesh.scale.multiplyScalar(1+dt*0.9);
       if(particle.life<=0){this.scene.remove(particle.mesh);particle.mesh.geometry.dispose();(particle.mesh.material as THREE.Material).dispose();this.dust.splice(i,1);}
     }
-    const lookahead=playing?Math.max(3,Math.min(6,frame.linvel().x*0.22)):5;
-    const desired=new THREE.Vector3(p.x+lookahead,Math.max(3,p.y+1.7),0);
+    const velocity=frame.linvel();
+    const lookahead=playing?Math.max(-4,Math.min(7.5,2.8+velocity.x*0.18)):5;
+    const verticalLead=playing?Math.max(-0.8,Math.min(1.5,velocity.y*0.1)):0;
+    const desired=new THREE.Vector3(p.x+lookahead,Math.max(3,p.y+1.7+verticalLead),0);
     this.target.lerp(desired,1-Math.exp(-dt*4.5));
     const shake=this.shake>0?this.shake:0;this.shake=Math.max(0,this.shake-dt);
     this.camera.position.set(this.target.x+(Math.random()-0.5)*shake,this.target.y+3.6+(Math.random()-0.5)*shake,32);

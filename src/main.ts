@@ -34,6 +34,7 @@ $('app').innerHTML=`
   <main>
     <div class="course-heading"><a class="wordmark" href="./" aria-label="REVBIKE home">${logo}</a><div class="eyebrow">A LITTLE THROTTLE. A LOT OF NERVE.</div></div>
     <section class="game-shell" aria-label="REVBIKE dirtbike game">
+      <span class="version-tag" title="REVBIKE v${__APP_VERSION__} · ${__APP_REVISION__}" aria-label="Game version ${__APP_VERSION__}">v${__APP_VERSION__}</span>
       <div class="game-toolbar">
         <div class="level-info"><span class="level-number">01</span><div><div class="level-kicker">THE FIRST RIDE <span class="difficulty">ROOKIE</span></div><h1>${level.name}</h1></div></div>
         <div class="timer-wrap"><div class="timer-label">RUN TIME <span id="timer-state">READY WHEN YOU ARE</span></div><div class="timer-row"><span id="timer" class="timer">00:00<span>.00</span></span><div id="live-stars" class="live-stars">${star.repeat(3)}</div></div></div>

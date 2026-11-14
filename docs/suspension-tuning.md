@@ -28,12 +28,12 @@ The old suspension motors used Rapier's default acceleration-based model on 0.12
 | Unloaded spring axle Y | −0.88 m |
 | Full-bump axle Y | −0.34 m |
 | Available travel per wheel | **0.66 m**, increased from 0.44 m |
-| Spring stiffness | 210 N/m, force-based |
-| Compression / rebound damping | 28 / 18 |
-| Ground / air lean torque | 42 / 36 |
-| Opposite-input air braking torque | 42 |
-| Lean input response time | 75 ms |
-| Ground / air angular damping | 1.25 / 0.45 |
+| Spring stiffness | 235 N/m, force-based |
+| Compression / rebound damping | 20 / 11 |
+| Ground back / forward / air lean torque | 96 / 72 / 48 |
+| Opposite-input air braking torque | 56 |
+| Lean input response time | 45 ms (25 ms on release) |
+| Ground / air angular damping | 1.25 / 0.55; neutral damping 2.8 plus pitch drag 8 |
 | Soft air spin limit | 7.5 rad/s, approximately 430°/s |
 | Gravity | −22 m/s², unchanged |
 | Physics timestep | 1/120 s, unchanged |
@@ -46,7 +46,7 @@ Rotation uses smooth torque impulses with separate air damping, a soft spin limi
 
 ## Measurements and regression checks
 
-With neutral controls after settling on flat ground, frame origin height is approximately **1.11 m**, versus approximately **0.58 m** before. Rear/front axle drop is approximately 0.67 / 0.68 m. Standing compression measured from full droop is approximately 0.33 / 0.32 m, leaving useful compression and extension travel.
+With neutral controls after settling on flat ground, frame origin height is approximately **1.14 m**, versus approximately **0.58 m** before. Rear/front axle drop is approximately 0.70 / 0.70 m. Standing compression measured from full droop is approximately 0.30 / 0.30 m, leaving useful compression and extension travel.
 
 In the browser's first jump, unloaded axle drop measured approximately **0.883 / 0.885 m**, while rear/front compression fell to approximately **0.117 / 0.115 m**. This is about 0.21 m of visible extension from the loaded stance.
 
@@ -71,3 +71,11 @@ The automated suite checks static sag, airborne extension, landing compression, 
 - Press **P** or open a bottom tab to freeze the physical readout. Resume to continue. **R** starts a new round at the beginning.
 
 Compression is measured from the full-droop limit. The overlay displays raw distances, the 0.66 m nominal travel, axle drop, conservative tire/fender clearance, and angular velocity in both rad/s and degrees/s. Orange compression bars indicate proximity to the bump stops. Diagnostics are off by default.
+
+## Arcade handling update
+
+Wheel restitution is now 0.12, with lighter compression and rebound damping for a visible landing bounce. The 0.66 m travel and wheel friction are retained. A 4 m spawn-height drop produced about 3.35 m/s upward chassis rebound, a 6 m drop about 4.30 m/s, and a 9 m drop about 5.63 m/s; all settled without a ragdoll. These are chassis spawn heights above the flat test course, not wheel drop distances.
+
+With A held, the front tire clears the ground by over 0.30 m within 0.50 s from a standstill, or about 0.28 s with throttle. Half a second of air lean produces about 6.15 rad/s; a second after release it falls to about 0.31 rad/s. Neutral braking applies torque to the chassis rather than setting the angle, clamping angular velocity, or braking the spinning tires. Gravity remains unchanged.
+
+There was no pre-existing force/angle ejection rule to raise. Tire-first landings remain free of those crash thresholds. The helmet sensor is inset to radius 0.23 m, and a small capsule inside the torso handles direct body strikes. Neither sensor supports the bike physically. Direct head/torso terrain collisions, hazards, and falling out of bounds still crash. The full level, its loop, all checkpoint recoveries, and clean front/backflip scoring pass alongside the new handling regressions.
