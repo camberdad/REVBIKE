@@ -1,8 +1,8 @@
 // Measures the Trials drivetrain: loop-outs, forward-lean recovery, A → D pops.
 // node node_modules/tsx/dist/cli.mjs scripts/probe-handling.ts
-import {RAPIER,Simulation,type Controls} from '../src/physics';
+import {RAPIER,Simulation,TRIALS_ENGINE,type Controls} from '../src/physics';
 import {testLevel,type Level} from '../src/track';
-await RAPIER.init();
+await RAPIER.init();if(process.env.R)TRIALS_ENGINE.reaction=Number(process.env.R);if(process.env.B)TRIALS_ENGINE.lowEndBoost=Number(process.env.B);if(process.env.P)TRIALS_ENGINE.popVelocity=Number(process.env.P);
 const neutral:Controls={gas:false,brake:false,left:false,right:false};
 const flat=():Level=>({...testLevel,mode:'trials',spawn:[2,1.9],segments:[{points:[[-100,0],[1000,0]],smooth:true}]});
 function run(name:string,input:(i:number,s:Simulation)=>Controls,steps=360){

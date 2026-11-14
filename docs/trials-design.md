@@ -1,4 +1,4 @@
-# Technical Trials / 1.3 release
+# Technical Trials / 1.4 release
 
 ## Reference and design intent
 
@@ -11,7 +11,7 @@ REVBIKE's Trials mode interprets those design principles with its own Rapier sim
 - W / Up: quick throttle pulses; Shift reduces demand to 38% and wheel-speed ceiling to 40%.
 - S / Down: strong wheel brakes, without automatic reverse in Trials.
 - A / D: physically move rider mass rearward or forward/down while grounded; bounded pitch control while airborne. Forward posture extends farther on steep slopes.
-- Space: a grounded bunny hop, also available as touch HOP. The impulse adds 6.2 m/s upward; gas adds 1.2 m/s forward. It has a 0.55-second cooldown, requires a new press and cannot add an air jump. Quick taps queue until the next fixed physics step. Space starts from the menu and retries after a crash.
+- Space: a grounded bunny hop, also available as touch HOP. The impulse adds 7.6 m/s upward (about a 1.6 m jump); gas adds 1.6 m/s forward. It has a 0.55-second cooldown, requires a new press and cannot add an air jump. Quick taps queue until the next fixed physics step. Space starts from the menu and retries after a crash.
 - R: immediate checkpoint retry. A manual retry adds a fault; retrying an already counted crash does not double count it. Elapsed time continues.
 - T / Backspace: full restart, clearing time, faults, checkpoints and obstacle state.
 
@@ -62,15 +62,17 @@ Use F3 or `?debug=1` for wheel compression, axle drop, tire gap, angular velocit
 
 ### Drivetrain and grip (`TRIALS_ENGINE` in `src/physics.ts`)
 
-- Engine torque is internal: whatever twists the rear wheel twists the chassis the other way (reaction 1.1). Full gas from rest lifts the front about 40° on flat ground, about 20° with D held, and loops the bike out with A held. On a 55° slope, neutral full gas loops out while gas + D climbs.
-- Torque peaks at 1.5× at zero wheel speed and fades to zero at the wheel-speed ceiling, so short W taps give controlled bursts. Throttle response is 30 ms.
-- Brakes (150 torque, locking) also react into the chassis (0.55), so hard braking dives the nose. A 5 m/s roll stops in 0.30 s; locked brakes plus forward weight hold the bike still on a 45° incline.
+- Trials uses lighter gravity (−18 instead of −22), a 25 rad/s wheel ceiling and a 15.5 m/s speed cap (about 54 km/h, up from 40), so the bike feels lighter and carries speed. A pair of 0.1 s W taps moves it about 3 m in a second; it coasts for several seconds.
+- Engine torque is internal: whatever twists the rear wheel twists the chassis the other way. How much depends on where the player puts the rider: 0.6 centred or forward, rising to 1.05 with A held (weight over the rear axle adds anti-squat lift). It follows the A/D input, not the body's sag, so a wheelie does not feed itself. Full gas from rest bucks the front about 22° on flat ground, about 10° with D held, and loops out with A held. On a 55° slope, neutral full gas loops out while gas + D climbs.
+- A moves the rider up to 0.9 m back (was 0.62).
+- Torque peaks at 1.3× at zero wheel speed and fades to zero at the wheel-speed ceiling, so short W taps give controlled bursts. Throttle response is 30 ms.
+- Brakes (150 torque, locking) also react into the chassis (0.55), so hard braking dives the nose. A 5 m/s roll stops in about 0.35 s; locked brakes plus forward weight hold the bike still on a 45° incline.
 - Tyre friction 5.2, terrain 3.6, obstacles 4.0, bridge planks 2.4, decks 2.6.
 - Engine braking with the throttle closed also reacts into the chassis.
 
 ### Weight-snap bunny hop
 
-Hold A on the ground for at least 0.08 s (full preload at 0.32 s), then press D with W held (or throttle above 30%) within 0.32 s. The bike pops up 3.9 to 5.6 m/s, with the rear end getting 1.45× the impulse and the front 0.75×, so the rear kicks up onto a ledge. It shares the 0.55 s cooldown and grounded rule with Space. Without gas, or without the A preload, nothing happens.
+Hold A on the ground for at least 0.08 s (full preload at 0.32 s), then press D with W held (or throttle above 30%) within 0.32 s. The bike pops up 4.1 to 5.8 m/s, with the rear end getting 1.45× the impulse and the front 0.75×, so the rear kicks up onto a ledge. It shares the 0.55 s cooldown and grounded rule with Space. Without gas, or without the A preload, nothing happens.
 
 ### Landings
 
@@ -101,4 +103,4 @@ Each section type was checked with focused experiments before being tuned:
 - The 1.9 m drop lands cleanly from a held 20° manual; rolling off at 4 m/s or faster endos.
 - The stepped 1.1 m gaps cannot be rolled across at 1.5 to 2.5 m/s with a 0.35 m rise, but a held manual at about 3 m/s carries both.
 
-`tests/trials-bot.ts` combines these techniques into a scripted rider that uses only W/S/A/D. The tests use it to clear an authored example of every section type. The full sweep (`scripts/sweep-trials.ts`) currently clears 88 of the 120 sections (73%); most failures are the scripted rider's limits on ledges and wall exits. **A human has still not ridden every course end to end**, and par times remain estimates.
+`tests/trials-bot.ts` combines these techniques into a scripted rider that uses only W/S/A/D. The tests use it to clear an authored example of every section type. The full sweep (`scripts/sweep-trials.ts`) currently clears 96 of the 120 sections (80%); most failures are the scripted rider's limits on logs, wall exits and some gap pillars. **A human has still not ridden every course end to end**, and par times remain estimates.

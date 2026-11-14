@@ -48,7 +48,7 @@ Open the local URL printed by Vite. `pnpm build` type-checks and produces a stan
 | Move rider rearward on ground; pitch back in air | A / Left |
 | Move rider forward/crouch on ground; pitch forward in air | D / Right |
 | Bunny hop: hold A, then snap to D with gas | A → D + W |
-| Bunny hop, grounded only (shortcut) | Space / touch HOP |
+| Jump (about 1.6 m), grounded only | Space / touch HOP |
 | Instant checkpoint retry; adds one fault | R (C alias) |
 | Full track restart; clears faults and clock | T / Backspace / toolbar restart |
 | Pause / resume | P / Escape |
@@ -64,7 +64,7 @@ The default **Trials Dirtbike** mode has **30 unlocked technical tracks across f
 
 **Faults rank ahead of time.** Zero faults earns Gold; zero faults at or under the track's par earns Platinum. Up to three faults earns Silver, up to eight Bronze. Crashes count once; pressing R after a crash does not add a second fault. Manual R retries add one fault. R restores the latest checkpoint's bike, rider posture and obstacle state, keeping the elapsed clock running. T / Backspace starts a clean track with zero faults and a new clock.
 
-Engine and brake torque react into the chassis: full gas lifts the front and loops the bike out on steep ground unless the rider leans forward (D); braking dives the nose. Hold A to load the rear, then snap to D with gas for a weight-shift bunny hop; Space is a shortcut hop. Holding either does not repeat; there is no double jump. A hard nose-first landing is a fault, so land rear wheel first. Trials uses high low-end torque, strong non-reversing brakes, a lower speed ceiling, larger tires and a longer rear swingarm. Ground lean moves a physical rider mass with horizontal/vertical joints; it does not apply a chassis pitch motor. Air pitch remains responsive and bounded for landing alignment. See [research, tuning and verification](docs/trials-design.md).
+Engine and brake torque react into the chassis: full gas lifts the front and loops the bike out on steep ground unless the rider leans forward (D); braking dives the nose. Hold A to load the rear, then snap to D with gas for a weight-shift bunny hop; Space is a full jump of about 1.6 m. Holding either does not repeat; there is no double jump. A hard nose-first landing is a fault, so land rear wheel first. Trials uses high low-end torque, strong non-reversing brakes, a lower speed ceiling, larger tires and a longer rear swingarm. Ground lean moves a physical rider mass with horizontal/vertical joints; it does not apply a chassis pitch motor. Air pitch remains responsive and bounded for landing alignment. See [research, tuning and verification](docs/trials-design.md).
 
 The **Garage & Rider** menu saves bike paint, jersey, helmet and rider number. Complete one different Trials track to unlock **Rock Crawler**, and five to unlock **Section R**. Bikes have distinct body additions and engine/grip settings. All tracks remain unlocked for testing.
 
@@ -112,12 +112,12 @@ pnpm test
 pnpm build
 ```
 
-The 102 regressions cover Trials spawns/geometry, engine-reaction loop-outs, A → D and Space hop gating, real rider mass transfer, snappy brakes that hold on 45°, nose-first landing faults, bridge sag and teeter tipping, sub-3 mm flat-ground chassis ripple, read-only draw interpolation, fault ranking and garage validation. A scripted rider that only presses W/S/A/D clears an authored example of every section type, every staircase, and the 55°/60°/65° faces; holding W alone fails all 30 courses. `scripts/sweep-trials.ts` prints a pass/fail grid for every section. The archived Stunt suite still drives all 25 full courses, collects their checkpoints and traverses their loops. The full 30-track Trials campaign has not been manually cleared end to end.
+The 104 regressions cover Trials spawns/geometry, engine-reaction loop-outs, A → D and Space hop gating, real rider mass transfer, snappy brakes that hold on 45°, nose-first landing faults, bridge sag and teeter tipping, sub-3 mm flat-ground chassis ripple, read-only draw interpolation, fault ranking and garage validation. A scripted rider that only presses W/S/A/D clears an authored example of every section type, every staircase (with Space hops or the A → D technique), and the 55°/60°/65° faces; holding W alone fails all 30 courses. `scripts/sweep-trials.ts` prints a pass/fail grid for every section. The archived Stunt suite still drives all 25 full courses, collects their checkpoints and traverses their loops. The full 30-track Trials campaign has not been manually cleared end to end.
 
 Browser checks cover a quick Space tap, R fault increments, T / Backspace resets, a zero-fault tutorial finish, a bike unlock, saved rider appearance, the six-card phone grid, menu tabs, and model loading. `node node_modules/tsx/dist/cli.mjs scripts/measure-trials.ts` repeats the flat-ground/brake measurements.
 
 ## Release versions
 
-A faint version label appears in the lower-right corner of the course, above the status bar. Hover it to see the source commit. Every new GitHub Pages deployment automatically receives `1.3.<GITHUB_RUN_NUMBER>`; the workflow run number increases for every new push or manual deployment. Retrying the same workflow keeps its release number. Local previews show `1.3.0-dev`. The build also publishes `version.json` containing the version and commit for verification. To start a new major/minor release line, change those two components in `package.json`; no manual patch bump is needed.
+A faint version label appears in the lower-right corner of the course, above the status bar. Hover it to see the source commit. Every new GitHub Pages deployment automatically receives `1.4.<GITHUB_RUN_NUMBER>`; the workflow run number increases for every new push or manual deployment. Retrying the same workflow keeps its release number. Local previews show `1.4.0-dev`. The build also publishes `version.json` containing the version and commit for verification. To start a new major/minor release line, change those two components in `package.json`; no manual patch bump is needed.
 
 The camera now uses a 34 m landscape / 30 m portrait vertical span, with damped velocity look-ahead. Fixed-step vehicle poses interpolate at the render rate to reduce visible stepping. The optional Stunt mode retains its arcade motor and suspension tuning. Tire-first impacts do not eject the rider by impact speed or bike angle; direct head/torso terrain contact, hazards and falling off the course cause crashes.

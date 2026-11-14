@@ -42,14 +42,17 @@ export function trialsBot(sim:Simulation,bot:BotState,kind:PieceKind):Controls{
  // Gap: small manual so the front floats over, then pop the rear as it reaches the edge.
  if(bot.phase==='gapLift'){
   if(rear.x>bot.edge-.5){set(bot,'pop');return {...neutral,right:true,gas:true};}
-  if(bot.timer<.3)return {...neutral,left:true};
-  if(bot.timer<3)return {...neutral,left:angle<.25,right:angle>.55,gas:angle<.25&&v.x<3.2};
+  if(bot.timer<.15)return {...neutral,left:true};
+  if(bot.timer<3)return {...neutral,left:angle<.3,right:angle>.6,gas:angle<.3&&v.x<4.2};
   set(bot,'ride');
  }
  const groundSlope=slopeAt(sim,(rear.x+front.x)/2),under=surfaceAt(sim,front.x);
  if(!sim.grounded){
   // Air: match the surface below, nose slightly up so the rear lands first.
-  const target=Math.max(-1,Math.min(1,slopeAt(sim,p.x+v.x*.2)))+.2,c=(target-angle)*4-w*1.4;
+  // Landing slope: sample ahead, ignoring vertical faces (a cliff is not a landing surface).
+  const slopes=[.4,.9,1.4,1.9].map(d=>slopeAt(sim,p.x+v.x*.15+d)).filter(a=>Math.abs(a)<1.15);
+  const landing=slopes.length?slopes.reduce((a,b)=>a+b)/slopes.length:0;
+  const target=Math.max(-1,Math.min(1,landing))+.2,c=(target-angle)*4-w*1.4;
   return {...neutral,left:c>.25,right:c<-.25};
  }
  const levelErr=angle-groundSlope;
@@ -91,13 +94,14 @@ export function trialsBot(sim:Simulation,bot:BotState,kind:PieceKind):Controls{
  if(dropX<Infinity){
   // Big drop: arrive with a little speed and wheelie off so the rear lands first.
   // Manual: hold the front ~20° up with A and feathered gas, rolling slowly.
-  if(dropX<3)return {...neutral,left:levelErr<.35,right:levelErr>.6,gas:levelErr<.3};
+  if(dropX<3)return {...neutral,left:levelErr<.35,right:levelErr>.6,gas:levelErr<.3,brake:v.x>3.6&&levelErr>.2};
   return {...neutral,gas:v.x<1.8,brake:v.x>2.4,right:levelErr>.15};
  }
  set(bot,'ride');
  if(levelErr<-.22)return {...neutral,left:true,gas:levelErr<-.4};
  const uphill=groundSlope>.12||surfaceAt(sim,front.x+1.5)-under>.3;
- return {...neutral,gas:v.x<2.6,brake:v.x>3.6&&levelErr>-.1,right:levelErr>.12||uphill&&levelErr>-.05,left:levelErr<-.15&&!uphill};
+ const cruise=kind==='drop'?2.2:2.6;
+ return {...neutral,gas:v.x<cruise,brake:v.x>cruise+1&&levelErr>-.1,right:levelErr>.12||uphill&&levelErr>-.05,left:levelErr<-.15&&!uphill};
 }
 
 /** The section the bike is currently riding. */

@@ -15,20 +15,22 @@ export const TUNING = { gravity:-22, rearTorque:26, leanTorque:72, wheelieTorque
 // Trials uses a larger, longer rig. The archived Stunt setup remains available.
 export const TRIALS_DIMENSIONS={wheelRadius:.62,wheelOffsets:[-1.28,1.04] as const,
  suspensionAnchorY:-.05,fullDroopAxleY:-.78,fullBumpAxleY:-.20,freeAxleY:-.56};
-export const TRIALS_TUNING={...TUNING,rearTorque:88,leanTorque:0,wheelieTorque:0,airLeanTorque:44,backwardAirTorque:42,airCounterTorque:65,
- maxWheelSpeed:18,springStiffness:380,compressionDamping:46,reboundDamping:36,wheelFriction:5.2,tireRestitution:.01,
+export const TRIALS_TUNING={...TUNING,gravity:-18,rearTorque:88,leanTorque:0,wheelieTorque:0,airLeanTorque:50,backwardAirTorque:48,airCounterTorque:70,
+ maxWheelSpeed:25,springStiffness:380,compressionDamping:46,reboundDamping:36,wheelFriction:5.2,tireRestitution:.01,
  groundAngularDamping:1.2,airAngularDamping:1.1,releaseAngularDamping:2,releasePitchDrag:8,maxAirAngularSpeed:4.2,maxBackwardAngularSpeed:4.0,
  leanResponseTime:.08,backwardLeanResponseTime:.1,leanReleaseTime:.07};
 // Trials drivetrain. Engine and brake torques are internal: whatever twists the
 // rear wheel twists the chassis the other way. Full gas therefore lifts the nose
 // and can loop the bike out unless the rider moves forward.
 export const TRIALS_ENGINE={
- lowEndBoost:1.5,   // torque multiplier at zero wheel speed, tapering to 0 at the ceiling
+ lowEndBoost:1.3,   // torque multiplier at zero wheel speed, tapering to 0 at the ceiling
  throttleResponse:.03,
- reaction:1.1,        // share of engine torque reacted into the chassis
+ reaction:.6,        // share of engine torque reacted into the chassis (rider centred or forward)
+ reactionBack:1.05,  // ...with the rider fully back over the rear axle (more anti-squat lift)
  brakeTorque:150, brakeReaction:.55,
  terrainFriction:3.6, obstacleFriction:4,
- popVelocity:5.6,    // A → D weight-snap bunny hop, scaled by preload
+ popVelocity:5.8,    // A → D weight-snap bunny hop, scaled by preload
+ spaceHopVelocity:7.6,
  popWindow:.32, popMinPreload:.08, popFullPreload:.32,
  badLandingSpeed:6.5, badLandingPitch:.5,
 };
@@ -194,7 +196,7 @@ export class Simulation {
       const rider=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x-.1,y+.55).setCcdEnabled(true));
       this.world.createCollider(RAPIER.ColliderDesc.ball(.18).setMass(3).setSensor(true).setCollisionGroups(0),rider);
       const joint=this.world.createImpulseJoint(RAPIER.JointData.prismatic({x:0,y:.65},{x:0,y:0},{x:1,y:0}),frame,carrier,true) as RAPIER.PrismaticImpulseJoint;
-      joint.setLimits(-.65,1.6);joint.configureMotorModel(RAPIER.MotorModel.ForceBased);joint.configureMotorPosition(-.1,900,75);joint.setContactsEnabled(false);
+      joint.setLimits(-.95,1.6);joint.configureMotorModel(RAPIER.MotorModel.ForceBased);joint.configureMotorPosition(-.1,900,75);joint.setContactsEnabled(false);
       const vertical=this.world.createImpulseJoint(RAPIER.JointData.prismatic({x:0,y:0},{x:0,y:0},{x:0,y:1}),carrier,rider,true) as RAPIER.PrismaticImpulseJoint;
       vertical.setLimits(-.42,.12);vertical.configureMotorModel(RAPIER.MotorModel.ForceBased);vertical.configureMotorPosition(-.1,1200,85);vertical.setContactsEnabled(false);
       this.bike.rider=rider;this.bike.riderJoint=joint;this.bike.riderVerticalJoint=vertical;this.bike.bodies.push(carrier,rider);
@@ -276,7 +278,7 @@ export class Simulation {
     if (!this.crashed) {
       const {frame,wheels}=this.bike;
       this.hopCooldown=Math.max(0,this.hopCooldown-STEP);
-      if(input.hop&&!this.hopWasDown&&this.grounded&&this.hopCooldown===0)this.bunnyHop(6.2,input.gas?1.2:0,false);
+      if(input.hop&&!this.hopWasDown&&this.grounded&&this.hopCooldown===0)this.bunnyHop(TRIALS_ENGINE.spaceHopVelocity,input.gas?1.6:0,false);
       this.hopWasDown=!!input.hop;
       if(this.isTrials){
         // Weight-snap bunny hop: load the rear with A, then snap forward with D
@@ -307,7 +309,8 @@ export class Simulation {
         this.drive=this.throttle*curve/E.lowEndBoost;
         const torque=this.tuning.rearTorque*this.throttle*curve;
         // The internal reaction pitches the chassis nose-up: wheelies, loop-outs.
-        if(torque>0){rear.applyTorqueImpulse(-torque*STEP,true);frame.applyTorqueImpulse(torque*E.reaction*STEP,true);}
+        const back=Math.max(0,Math.min(1,-(this.riderTargetX+.1)/.8)),reaction=E.reaction+(E.reactionBack-E.reaction)*back;
+        if(torque>0){rear.applyTorqueImpulse(-torque*STEP,true);frame.applyTorqueImpulse(torque*reaction*STEP,true);}
         if(!input.gas){const engineBrake=-rear.angvel()*.6*STEP;rear.applyTorqueImpulse(engineBrake,true);frame.applyTorqueImpulse(-engineBrake*E.reaction,true);}
         // Snappy brakes lock the wheels; the caliper reaction dives the chassis.
         if(input.brake)for(const wheel of wheels){
@@ -317,7 +320,7 @@ export class Simulation {
         const shift=Number(input.right)-Number(input.left),incline=Math.max(0,Math.min(1,(frame.rotation()-.15)/.55));
         // Forward snaps are quicker than settling back, so D can catch a wheelie.
         const xResponse=shift>0?.09:shift<0?.11:.16;
-        this.riderTargetX+=((this.grounded?(shift>0?.45+incline*1.05:shift<0?-.62:-.1):this.riderTargetX)-this.riderTargetX)*(1-Math.exp(-STEP/xResponse));
+        this.riderTargetX+=((this.grounded?(shift>0?.45+incline*1.05:shift<0?-.9:-.1):this.riderTargetX)-this.riderTargetX)*(1-Math.exp(-STEP/xResponse));
         this.riderTargetY+=((this.grounded?(shift>0?-.2-incline*.2:shift<0?.1:-.1):this.riderTargetY)-this.riderTargetY)*(1-Math.exp(-STEP/.18));
         this.bike.riderJoint!.configureMotorPosition(this.riderTargetX,900,75);
         this.bike.riderVerticalJoint!.configureMotorPosition(this.riderTargetY,1200,85);
@@ -350,7 +353,7 @@ export class Simulation {
       if(airborne&&Math.abs(omega)>limit)torque-=Math.sign(omega)*(Math.abs(omega)-limit)*8;
       if(!this.isTrials||airborne)frame.applyTorqueImpulse(torque*STEP,true);
       const speed=frame.linvel();
-      const speedLimit=this.isTrials?11.5:29;
+      const speedLimit=this.isTrials?15.5:29;
       if(Math.abs(speed.x)>speedLimit)frame.applyImpulse({x:-Math.sign(speed.x)*(Math.abs(speed.x)-speedLimit)*14*STEP,y:0},true);
     }
     this.world.step(this.events);
@@ -494,3 +497,4 @@ export class Simulation {
   }
   dispose() {this.events.free();this.world.free();}
 }
+
