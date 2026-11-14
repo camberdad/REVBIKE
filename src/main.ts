@@ -2,6 +2,8 @@ import './style.css';
 import { RAPIER, Simulation, STEP, TUNING, BIKE_DIMENSIONS, type Controls } from './physics';
 import { GameRenderer } from './render';
 import { level1, testLevel } from './track';
+import {readBest} from './progress';
+import {campaign,campaignLevel,environments,starsFor,themeFor} from './campaign';
 import { BikeAudio } from './audio';
 import { DEFAULT_SETTINGS, SETTINGS_KEY, normalizeSettings, FrameLimiter, type GameSettings } from './settings';
 
@@ -23,12 +25,14 @@ const params=new URLSearchParams(location.search);
 let debugEnabled=['1','log'].includes(params.get('debug')??'');
 const logRig=params.get('debug')==='log';
 if(params.get('embed')==='1')document.documentElement.classList.add('embed-mode');
-const level=params.get('course')==='test'?testLevel:level1;
+const level=params.get('course')==='test'?testLevel:params.get('course')==='classic'?level1:campaignLevel(Number(params.get('level')??1));
+const theme=themeFor(level);
+document.documentElement.dataset.environment=theme.id;
 const logo='<span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i></span>REVBIKE<span class="brand-dot" aria-hidden="true">®</span>';
 let settings:GameSettings={...DEFAULT_SETTINGS};
 try{settings=normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY)??'null'));}catch{}
 const frameLimiter=new FrameLimiter(settings.frameRate);
-let best:number|null=null;try{const saved=localStorage.getItem(`revbike-best-${level.name}`);if(saved)best=Number(saved);}catch{}
+let best=readBest(level);
 
 $('app').innerHTML=`
   <main>
@@ -36,14 +40,14 @@ $('app').innerHTML=`
     <section class="game-shell" aria-label="REVBIKE dirtbike game">
       <span class="version-tag" title="REVBIKE v${__APP_VERSION__} · ${__APP_REVISION__}" aria-label="Game version ${__APP_VERSION__}">v${__APP_VERSION__}</span>
       <div class="game-toolbar">
-        <div class="level-info"><span class="level-number">01</span><div><div class="level-kicker">THE FIRST RIDE <span class="difficulty">ROOKIE</span></div><h1>${level.name}</h1></div></div>
+        <div class="level-info"><span class="level-number">${String(level.id??1).padStart(2,'0')}</span><div><div class="level-kicker">${theme.name.toUpperCase()} <span class="difficulty">${level.id?`LEVEL ${level.id}`:'TEST'}</span></div><h1>${level.name}</h1></div></div>
         <div class="timer-wrap"><div class="timer-label">RUN TIME <span id="timer-state">READY WHEN YOU ARE</span></div><div class="timer-row"><span id="timer" class="timer">00:00<span>.00</span></span><div id="live-stars" class="live-stars">${star.repeat(3)}</div></div></div>
-        <div class="toolbar-actions"><button id="restart" class="icon-button" aria-label="Restart round (R)" title="Restart round · R">${icon('restart')}</button><button id="pause" class="icon-button" aria-label="Pause (P)" title="Pause · P">${icon('pause')}</button><button id="menu" class="icon-button" aria-label="Open settings and guide" title="Settings & guide">${icon('settings')}</button><span class="toolbar-divider"></span><button id="sound" class="icon-button" aria-label="Enable sound" title="Enable sound">${icon('mute')}</button><button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" title="Fullscreen">${icon('fullscreen')}</button></div>
+        <div class="toolbar-actions"><button id="restart" class="icon-button" aria-label="Restart round (R)" title="Restart round · R">${icon('restart')}</button><button id="pause" class="icon-button" aria-label="Pause (P)" title="Pause · P">${icon('pause')}</button><button id="menu" class="icon-button" aria-label="Open settings and guide" title="Settings & guide">${icon('settings')}</button><button id="toolbar-levels" class="icon-button" aria-label="Level select" title="Level select">${icon('flag')}</button><span class="toolbar-divider"></span><button id="sound" class="icon-button" aria-label="Enable sound" title="Enable sound">${icon('mute')}</button><button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" title="Fullscreen">${icon('fullscreen')}</button></div>
       </div>
       <div id="stage" class="stage">
-        <canvas id="game" tabindex="0" aria-label="Dirtbike course. Use W or Up to accelerate, S or Down to brake, A and D to lean. R restarts the round from the beginning."></canvas>
+        <canvas id="game" tabindex="0" aria-label="Dirtbike course. Use W or Up to accelerate, S or Down to brake, A and D to lean. R restarts the round from the beginning. C retries the last checkpoint."></canvas>
         <div class="stage-vignette"></div>
-        <div class="stage-top"><span class="location-label"><span class="live-dot"></span> REDROCK COUNTY, NV</span><div class="progress-wrap"><span>START</span><div class="progress-track"><div id="progress-fill"></div>${level.checkpoints.map(p=>`<i style="left:${p[0]/level.length*100}%"></i>`).join('')}<b id="progress-bike"></b></div><span>${icon('flag')}</span></div><span class="best-label">PERSONAL BEST <b id="best">${best?formatTime(best):'— —'}</b></span></div>
+        <div class="stage-top"><span class="location-label"><span class="live-dot"></span> ${theme.name.toUpperCase()} / ${String(level.id??1).padStart(2,'0')}</span><div class="progress-wrap"><span>START</span><div class="progress-track"><div id="progress-fill"></div>${level.checkpoints.map(p=>`<i style="left:${p[0]/level.length*100}%"></i>`).join('')}<b id="progress-bike"></b></div><span>${icon('flag')}</span></div><span class="best-label">PERSONAL BEST <b id="best">${best?formatTime(best):'— —'}</b></span></div>
         <div id="toast" class="toast" role="status"></div>
         <aside id="rig-debug" class="rig-debug hidden" aria-label="Suspension and angular velocity diagnostics">
           <div class="rig-debug-heading">REVBIKE / RIG DEBUG <span>F3 TO HIDE</span></div>
@@ -59,7 +63,7 @@ $('app').innerHTML=`
           <span class="intro-kicker"><span></span> YOUR NEXT BAD IDEA STARTS HERE.</span>
           <h2 class="intro-logo" aria-label="REVBIKE"><span class="wordmark">${logo}</span></h2>
           <p>Find your balance. Send the gaps.<br>Stick the landing. Chase three stars.</p>
-          <div class="home-menu"><button id="start" class="primary-button">LET’S RIDE ${icon('arrow')}</button><button id="home-settings" class="menu-button">${icon('settings')} SETTINGS</button><button id="home-how" class="menu-button">${icon('help')} HOW TO RIDE</button></div><span class="enter-hint">PRESS ENTER TO RIDE</span>
+          <div class="home-menu"><button id="start" class="primary-button">LET’S RIDE ${icon('arrow')}</button><button id="home-levels" class="menu-button">${icon('flag')} LEVEL SELECT</button><button id="home-settings" class="menu-button">${icon('settings')} SETTINGS</button><button id="home-how" class="menu-button">${icon('help')} HOW TO RIDE</button></div><span class="enter-hint">PRESS ENTER TO RIDE</span>
         </div>
         <div id="riding-hint" class="riding-hint hidden"><kbd>W</kbd> THROTTLE <span>·</span> <kbd>A</kbd><kbd>D</kbd> FIND YOUR BALANCE</div>
         <div class="stage-bottom"><div class="scene-caption"><span class="crosshair">+</span> <span>NO ROAD. NO RULES.<br><b>JUST YOU & GRAVITY.</b></span></div><div class="speed-readout"><span id="speed">00</span><small>KM/H</small><i></i><span class="gear-label">DIRT<br><b>MODE</b></span></div></div>
@@ -68,10 +72,12 @@ $('app').innerHTML=`
         <div id="loading" class="loading"><span class="brand-symbol"><i></i><i></i><i></i></span><b>WARMING UP THE ENGINE</b><span id="loading-status">Building a little trouble…</span></div>
       </div>
       <div class="game-bottom-bar"><span><span class="green-dot"></span><b id="run-status">ALL SYSTEMS GO</b></span><span id="checkpoint-status">CHECKPOINT 00 / ${String(level.checkpoints.length).padStart(2,'0')}</span><span>FLIPS SHAVE TIME. <b>−0.5s / FLIP</b> ${icon('arrow')}</span></div>
+      <div id="level-overlay" class="level-overlay hidden"><div class="level-select-card" role="dialog" aria-modal="true" aria-labelledby="level-select-title"><div class="level-select-heading"><div><span class="eyebrow">25 COURSES / ALL UNLOCKED</span><h2 id="level-select-title">PICK YOUR NEXT BAD IDEA.</h2></div><button id="levels-back" class="menu-back">← BACK</button></div><div id="environment-tabs" class="environment-tabs" role="tablist" aria-label="Level environments"></div><div id="level-grid" class="level-grid" role="tabpanel" aria-label="Courses"></div><div class="level-select-foot"><span>2 CHECKPOINTS · 3–5 STUNT SET-PIECES · GOLD / SILVER / BRONZE</span><span id="campaign-progress"></span></div></div></div>
+      <div id="setpiece-hint" class="setpiece-hint hidden"><b id="setpiece-name"></b><span id="setpiece-instruction"></span></div>
       <div id="menu-overlay" class="menu-overlay hidden"><div class="menu-card" role="dialog" aria-modal="true" aria-label="Ride guide and settings"><div class="menu-card-heading"><span class="eyebrow">REVBIKE / PIT STOP</span><button id="menu-back" class="menu-back">← BACK</button></div><div class="bottom-tabs-row"><div class="bottom-tabs" role="tablist" aria-label="Game guide and preferences"><button id="tab-how" role="tab" aria-selected="true" aria-controls="panel-how">${icon('help')} HOW TO RIDE</button><button id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" tabindex="-1">${icon('settings')} GAMEPLAY SETTINGS</button></div><button id="resume-panel" class="resume-panel hidden">RESUME RIDE ${icon('play')}</button></div>
       <section id="panel-how" class="bottom-panel" role="tabpanel" aria-labelledby="tab-how" tabindex="0">
         <div class="controls-guide"><div class="control-item"><span class="key-pair"><kbd>W</kbd><small>↑</small></span><span>THROTTLE<small>Give it some.</small></span></div><div class="control-item"><span class="key-pair"><kbd>S</kbd><small>↓</small></span><span>BRAKE / REVERSE<small>Keep it in check.</small></span></div><div class="control-item"><span class="key-pair double"><kbd>A</kbd><kbd>D</kbd></span><span>LEAN / FLIP<small>Own the airtime.</small></span></div><div class="control-item"><kbd>R</kbd><span>RESTART ROUND<small>Back to the beginning.</small></span></div><div class="control-item"><kbd>P</kbd><span>PAUSE<small>Take a breather.</small></span></div></div>
-        <div class="guide-note"><span>Keep your helmet clear. Land full flips for <b>−0.5s each.</b> R resets the bike, timer, bonuses, hazards, and progress.</span><div class="star-targets">${level.stars.map((t,i)=>`<div class="star-target"><span>${star.repeat(3-i)}</span><b>&lt; ${t}s</b></div>`).join('')}</div></div>
+        <div class="guide-note"><span>Keep your helmet clear. Land full flips for <b>−0.5s each.</b> R resets the round. C retries your last checkpoint with the clock running.</span><div class="star-targets">${level.stars.map((t,i)=>`<div class="star-target"><span>${star.repeat(3-i)}</span><b>&lt; ${t}s</b></div>`).join('')}</div></div>
       </section>
       <section id="panel-settings" class="bottom-panel hidden" role="tabpanel" aria-labelledby="tab-settings" tabindex="0">
         <div class="settings-grid">
@@ -92,6 +98,9 @@ let sim:Simulation,view:GameRenderer;
 let elapsed=0,bonus=0,checkpoint=-1,crashElapsed=0,steps=0,toastTimeout=0,renderFrames=0;
 let activeFlips=0,modalPrimary=()=>{},modalSecondary=()=>{};
 let panelPaused=false;
+let checkpointSnapshot:ReturnType<Simulation['captureCheckpoint']>|undefined;
+let checkpointBonus=0,checkpointFlips=0;
+function retryCheckpoint(){if(!checkpointSnapshot)return;sim.restoreCheckpoint(checkpointSnapshot);bonus=checkpointBonus;activeFlips=checkpointFlips;view.reset(sim.bike.frame.translation());for(let i=0;i<=checkpoint;i++)view.checkpoint(i);start();toast('CHECKPOINT RETRY / CLOCK KEEPS RUNNING');}
 const controls:Controls={gas:false,brake:false,left:false,right:false};
 const audio=new BikeAudio();
 
@@ -107,16 +116,17 @@ function modal(kicker:string,title:string,content:string,primary:string,primaryF
   modalPrimary=primaryFn;modalSecondary=secondaryFn;$('modal').classList.remove('hidden');$('modal-primary').focus();
 }
 function hideModal(){$('modal').classList.add('hidden');$('game').focus({preventScroll:true});}
-function start(){if(!sim)return;closeMenu(false);state='playing';panelPaused=false;$('resume-panel').classList.add('hidden');hideModal();$('intro').classList.add('hidden');$('riding-hint').classList.remove('hidden');$('timer-state').textContent='MAKE IT COUNT';$('run-status').textContent='RUN IN PROGRESS';$('game').focus({preventScroll:true});}
+function start(){if(!sim)return;levelsPaused=false;$('level-overlay').classList.add('hidden');closeMenu(false);state='playing';panelPaused=false;$('resume-panel').classList.add('hidden');hideModal();$('intro').classList.add('hidden');$('riding-hint').classList.remove('hidden');$('timer-state').textContent='MAKE IT COUNT';$('run-status').textContent='RUN IN PROGRESS';$('game').focus({preventScroll:true});}
 function restart(){
-  if(!sim)return;closeMenu(false);clearControls();hideModal();
-  elapsed=0;bonus=0;checkpoint=-1;activeFlips=0;steps=0;
+  if(!sim)return;levelsPaused=false;$('level-overlay').classList.add('hidden');closeMenu(false);clearControls();hideModal();
+  elapsed=0;bonus=0;checkpoint=-1;checkpointSnapshot=undefined;activeFlips=0;steps=0;
   panelPaused=false;$('resume-panel').classList.add('hidden');sim.restartRound();view.reset();
   state='playing';crashElapsed=0;$('intro').classList.add('hidden');$('riding-hint').classList.remove('hidden');
   $('run-status').textContent='RUN IN PROGRESS';$('timer-state').textContent='MAKE IT COUNT';updateHUD();
   toast('FRESH ROUND. BACK TO THE START.');
 }
 function pause(){
+  if(!$('level-overlay').classList.contains('hidden')){closeLevels();return;}
   if(!$('menu-overlay').classList.contains('hidden')){closeMenu();return;}
   if(panelPaused){resumePanel();return;}
   if(state==='finished'||state==='crashed')return;
@@ -178,13 +188,39 @@ function updateRigDebug(){
   $('debug-clearance').textContent=`${rear.tireClearance.toFixed(3)} / ${front.tireClearance.toFixed(3)} m`;
   $('debug-angular').textContent=`${omega.toFixed(3)} rad/s`;
 }
+function levelUrl(id:number){const query=new URLSearchParams(location.search);query.delete('course');query.set('level',String(id));return `./?${query}`;}
+let selectedEnvironment=theme.id,levelsPaused=false;
+function renderLevelGrid(){
+  $('environment-tabs').innerHTML=environments.map(e=>`<button role="tab" id="env-${e.id}" aria-selected="${selectedEnvironment===e.id}" aria-controls="level-grid" tabindex="${selectedEnvironment===e.id?0:-1}" data-environment="${e.id}"><span>${e.range}</span>${e.name}</button>`).join('');
+  let totalStars=0,completed=0;
+  $('level-grid').innerHTML=campaign.filter(l=>l.environment===selectedEnvironment).map(l=>{
+    const saved=readBest(l);
+    const earned=saved===null?0:starsFor(l,saved);totalStars+=earned;if(saved!==null)completed++;
+    return `<a class="level-tile ${l.id===level.id?'current':''}" href="${levelUrl(l.id!)}" aria-label="Level ${l.id}: ${l.name}, ${saved===null?'not played':`${earned} stars, best ${formatTime(saved)}`}"><div class="level-tile-top"><span>${String(l.id).padStart(2,'0')}</span><small>${l.id===level.id?'CURRENT':'UNLOCKED'}</small></div><h3>${l.name}</h3><p>${l.setPieces!.map(s=>s.name).join(' / ')}</p><div class="level-tile-stars">${[0,1,2].map(i=>`<span class="${i<earned?'earned':''}">${star}</span>`).join('')}</div><div class="level-tile-best"><span>BEST</span><b>${saved===null?'— —':formatTime(saved)}</b></div><div class="level-tile-targets">${['GOLD','SILVER','BRONZE'].map((label,i)=>`<span>${label}<b>&lt; ${l.stars[i]}s</b></span>`).join('')}</div></a>`;
+  }).join('');
+  $('campaign-progress').textContent=`${completed} / 5 COMPLETE · ${totalStars} / 15 STARS`;
+  for(const tab of $('environment-tabs').querySelectorAll<HTMLButtonElement>('button')){
+    tab.onclick=()=>{selectedEnvironment=tab.dataset.environment as typeof selectedEnvironment;renderLevelGrid();$(`env-${selectedEnvironment}`).focus();};
+    tab.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();e.stopPropagation();let index=environments.findIndex(env=>env.id===selectedEnvironment);index=e.key==='Home'?0:e.key==='End'?4:(index+(e.key==='ArrowRight'?1:4))%5;selectedEnvironment=environments[index].id;renderLevelGrid();$(`env-${selectedEnvironment}`).focus();};
+  }
+}
+function openLevels(){
+  if(state==='playing'){previousState=state;state='paused';levelsPaused=true;clearControls();}
+  hideModal();$('intro').classList.add('hidden');$('menu-overlay').classList.add('hidden');renderLevelGrid();$('level-overlay').classList.remove('hidden');$('levels-back').focus();
+}
+function closeLevels(){
+  $('level-overlay').classList.add('hidden');if(levelsPaused){levelsPaused=false;state=previousState;}
+  if(state==='ready')$('intro').classList.remove('hidden');
+  (state==='ready'?$('home-levels'):$('game')).focus({preventScroll:true});
+}
+
 function finish(){
   if(state!=='playing')return;state='finished';clearControls();
   const time=Math.max(0,elapsed-bonus),stars=level.stars.filter(t=>time<t).length;
   if(best===null||time<best){best=time;try{localStorage.setItem(`revbike-best-${level.name}`,String(time));}catch{}$('best').textContent=formatTime(time);}
   $('run-status').textContent='RUN COMPLETE';$('timer-state').textContent='IN THE BOOKS';
   view.burst(level.finish[0],3,0xd8ef68,65,9);
-  modal('REDROCK RIDGE / RUN COMPLETE',stars===3?'ABSOLUTELY SENT.':'DUST SETTLED.',`<div class="result-stars">${[0,1,2].map(i=>`<span class="${i<stars?'earned':''}">${star}</span>`).join('')}</div><div class="result-time">${formatTime(time)}</div><div class="result-stats"><span>FLIP BONUS<b>−${bonus.toFixed(1)}s</b></span><span>CLEAN FLIPS<b>${activeFlips}</b></span><span>PROGRESS<b>100%</b></span></div><p>${stars===3?'Three stars. One very good bad idea.':`Chase ${stars===2?'three':'more'} stars. Next target: under ${level.stars[Math.max(0,2-stars)]} seconds.`}</p>`,'RUN IT BACK',restart,'TAKE IN THE VIEW',()=>hideModal());
+  modal(`${level.name.toUpperCase()} / ${stars===3?'GOLD':stars===2?'SILVER':stars===1?'BRONZE':'FINISHED'}`,stars===3?'ABSOLUTELY SENT.':'DUST SETTLED.',`<div class="result-stars">${[0,1,2].map(i=>`<span class="${i<stars?'earned':''}">${star}</span>`).join('')}</div><div class="result-time">${formatTime(time)}</div><div class="result-stats"><span>FLIP BONUS<b>−${bonus.toFixed(1)}s</b></span><span>CLEAN FLIPS<b>${activeFlips}</b></span><span>PROGRESS<b>100%</b></span></div><p>${stars===3?'Three stars. One very good bad idea.':`Chase ${stars===2?'three':'more'} stars. Next target: under ${level.stars[Math.max(0,2-stars)]} seconds.`}</p>`,level.id&&level.id<25?'NEXT LEVEL':'RUN IT BACK',level.id&&level.id<25?()=>location.assign(levelUrl(level.id!+1)):restart,'LEVEL SELECT',openLevels);
 }
 function updateHUD(){
   updateRigDebug();
@@ -197,9 +233,13 @@ function updateHUD(){
   $('checkpoint-status').textContent=`CHECKPOINT ${String(checkpoint+1).padStart(2,'0')} / ${String(level.checkpoints.length).padStart(2,'0')}`;
   const p=sim.bike.frame.translation(),progress=Math.min(100,Math.max(0,p.x/level.length*100));
   $('progress-fill').style.width=`${progress}%`;$('progress-bike').style.left=`${progress}%`;
+  const setpiece=[...(level.setPieces??[])].reverse().find(piece=>p.x>=piece.x-12);
+  $('setpiece-hint').classList.toggle('hidden',!setpiece||state!=='playing');
+  if(setpiece){$('setpiece-name').textContent=setpiece.name;$('setpiece-instruction').textContent=setpiece.hint;}
   $('speed').textContent=String(Math.round(Math.abs(sim.bike.frame.linvel().x)*3.6)).padStart(2,'0');
 }
 
+$('home-levels').onclick=openLevels;$('toolbar-levels').onclick=openLevels;$('levels-back').onclick=closeLevels;
 $('start').onclick=start;$('restart').onclick=restart;$('pause').onclick=pause;
 $('resume-panel').onclick=()=>closeMenu();
 $('menu-back').onclick=()=>closeMenu();
@@ -229,6 +269,7 @@ const keymap:Record<string,keyof Controls>={w:'gas',arrowup:'gas',s:'brake',arro
 window.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='F3'){e.preventDefault();if(!e.repeat){debugEnabled=!debugEnabled;syncRigDebug();}return;}
+  if(!$('level-overlay').classList.contains('hidden')){if(e.key==='Escape'){e.preventDefault();closeLevels();}else if(e.key.toLowerCase()==='r'){e.preventDefault();restart();}return;}
   if(!$('menu-overlay').classList.contains('hidden')){
     if(e.key==='Escape'){e.preventDefault();closeMenu();return;}
     if(e.key.toLowerCase()!=='r')return;
@@ -238,6 +279,7 @@ window.addEventListener('keydown',e=>{
   if(keymap[key]||['r','p','escape','enter',' '].includes(key))e.preventDefault();
   if(e.repeat && ['r','p','escape','enter'].includes(key))return;
   if(key==='r'){restart();return;}
+  if(key==='c'&&checkpointSnapshot){retryCheckpoint();return;}
   if(key==='p'||key==='escape'){pause();return;}
   if(key==='enter'||key===' '){if(state==='ready')start();else if(state==='crashed'||state==='finished')restart();else if(state==='paused'){if(panelPaused)resumePanel();else modalPrimary();}return;}
   if(keymap[key]){if(state==='ready')start();if(state==='playing')controls[keymap[key]]=true;}
@@ -253,6 +295,10 @@ for(const button of document.querySelectorAll<HTMLButtonElement>('[data-control]
 }
 // Keep keyboard focus inside dialogs; R remains available for instant retries.
 document.addEventListener('keydown',e=>{
+  if(e.key==='Tab'&&!$('level-overlay').classList.contains('hidden')){
+    const items=[...$('level-overlay').querySelectorAll<HTMLElement>('button,a')].filter(el=>el.getClientRects().length&&el.tabIndex>=0),first=items[0],last=items.at(-1)!;
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  }
   if(e.key==='Tab'&&!$('menu-overlay').classList.contains('hidden')){
     const items=[...$('menu-overlay').querySelectorAll<HTMLElement>('button,select,input,[tabindex="0"]')].filter(el=>el.getClientRects().length>0&&el.tabIndex>=0);
     const first=items[0],last=items[items.length-1];
@@ -279,7 +325,7 @@ async function boot(){
     };
     // Settle the suspension before presenting the opening scene.
     for(let i=0;i<100;i++)sim.step(controls);
-    $('loading').classList.add('hidden');updateHUD();
+    sim.resetHazards();$('loading').classList.add('hidden');updateHUD();
     let last=performance.now(),accumulator=0,hudClock=0,debugClock=0;
     const loop=(now:number)=>{
       const dt=Math.min((now-last)/1000,0.05);last=now;
@@ -289,7 +335,7 @@ async function boot(){
           const running=state==='playing';sim.step(controls);steps++;elapsed+=STEP;
           if(running){
             const p=sim.bike.frame.translation();
-            level.checkpoints.forEach(([x,y],i)=>{if(i>checkpoint && p.x>x && p.x<x+4 && p.y>y-0.5 && p.y<y+5 && !sim.crashed){checkpoint=i;view.checkpoint(i);toast(`CHECKPOINT ${String(i+1).padStart(2,'0')} / LOCKED IN`);}});
+            level.checkpoints.forEach(([x,y],i)=>{if(i>checkpoint && p.x>x && p.x<x+4 && p.y>y-0.5 && p.y<y+5 && !sim.crashed){checkpoint=i;checkpointSnapshot=sim.captureCheckpoint();checkpointBonus=bonus;checkpointFlips=activeFlips;view.checkpoint(i);toast(`CHECKPOINT ${String(i+1).padStart(2,'0')} / LOCKED IN`);}});
             if(p.x>=level.finish[0] && p.y>level.finish[1]-1 && !sim.crashed)finish();
           }
           accumulator-=STEP;
@@ -299,7 +345,7 @@ async function boot(){
       if(state==='crashed'){
         crashElapsed+=dt;
         if(crashElapsed>1.1&&$('modal').classList.contains('hidden'))
-          modal('GRAVITY WINS THIS ROUND.','SHAKE OFF THE DUST.','<p>A fresh round is one key away.<br>Hit <kbd>R</kbd> to restart at the beginning with a clean clock.</p>','RESTART ROUND',restart,'TAKE A BREATHER',()=>{state='paused';previousState='crashed';panelPaused=true;$('resume-panel').classList.remove('hidden');hideModal();});
+          modal('GRAVITY WINS THIS ROUND.','SHAKE OFF THE DUST.','<p>R starts a fresh round.<br>C returns to your last checkpoint; the clock continues.</p>','RESTART ROUND',restart,checkpoint>=0?'RETRY CHECKPOINT':'LEVEL SELECT',checkpoint>=0?retryCheckpoint:openLevels);
       }
       hudClock+=dt;if(hudClock>0.05){updateHUD();hudClock=0;}
       if(debugEnabled&&logRig&&(state==='playing'||state==='crashed')){

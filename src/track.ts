@@ -1,12 +1,22 @@
 import data from './level1.json';
 
 export type Point = [number, number];
-export type Hazard = { type: string; x: number; y: number; width?: number; radius?: number };
+export type Environment='countryside'|'construction'|'canyon'|'neon'|'volcano';
+export type Hazard = { type: string; x: number; y: number; width?: number; radius?: number;
+  delay?:number; triggerX?:number; amplitude?:number; period?:number; phase?:number; anchorY?:number };
+export type MechanismKind='seesaw'|'flex'|'lift'|'roller'|'collapse'|'conveyor'|'spring'|'boost';
+export interface Mechanism {kind:MechanismKind;x:number;y:number;width:number;angle?:number;speed?:number;rise?:number;delay?:number;}
+export interface TrackProp {kind:string;x:number;y:number;width?:number;height?:number;}
 export interface Level {
   name: string; subtitle: string; length: number; stars: number[]; spawn: Point;
   segments: { points: number[][]; smooth: boolean }[];
   loop?: { x: number; y: number; radius: number };
   hazards: Hazard[]; checkpoints: number[][]; finish: number[];
+  id?:number; environment?:Environment; targetSeconds?:number;
+  setPieces?:{name:string;hint:string;x:number}[];
+  mechanisms?:Mechanism[]; props?:TrackProp[];
+  loops?:NonNullable<Level['loop']>[];
+  paths?:Point[][]; magneticPaths?:Point[][];
 }
 export const level1 = data as Level;
 export const testLevel: Level = {
@@ -25,7 +35,7 @@ export function sampleSegment(segment: Level['segments'][number]): Point[] {
   const result: Point[] = [];
   for (let i=0; i<p.length-1; i++) {
     const [x,y]=p[i], [nx,ny]=p[i+1], dx=nx-x;
-    const n=Math.ceil(dx/0.45);
+    const n=Math.max(1,Math.ceil(dx/0.18));
     for (let j=0;j<n;j++) {
       const t=j/n, t2=t*t, t3=t2*t;
       result.push([x+t*dx,(2*t3-3*t2+1)*y+(t3-2*t2+t)*dx*tangents[i]+(-2*t3+3*t2)*ny+(t3-t2)*dx*tangents[i+1]]);
@@ -36,8 +46,8 @@ export function sampleSegment(segment: Level['segments'][number]): Point[] {
 }
 
 export function loopPoints(loop: NonNullable<Level['loop']>): Point[] {
-  return Array.from({length: 161}, (_,i) => {
-    const t=-Math.PI/2+i/160*Math.PI*2;
+  return Array.from({length: 321}, (_,i) => {
+    const t=-Math.PI/2+i/320*Math.PI*2;
     return [loop.x+Math.cos(t)*loop.radius,loop.y+Math.sin(t)*loop.radius];
   });
 }

@@ -79,3 +79,7 @@ Wheel restitution is now 0.12, with lighter compression and rebound damping for 
 With A held, the front tire clears the ground by over 0.30 m within 0.50 s from a standstill, or about 0.28 s with throttle. Half a second of air lean produces about 6.15 rad/s; a second after release it falls to about 0.31 rad/s. Neutral braking applies torque to the chassis rather than setting the angle, clamping angular velocity, or braking the spinning tires. Gravity remains unchanged.
 
 There was no pre-existing force/angle ejection rule to raise. Tire-first landings remain free of those crash thresholds. The helmet sensor is inset to radius 0.23 m, and a small capsule inside the torso handles direct body strikes. Neither sensor supports the bike physically. Direct head/torso terrain collisions, hazards, and falling out of bounds still crash. The full level, its loop, all checkpoint recoveries, and clean front/backflip scoring pass alongside the new handling regressions.
+
+## Campaign revision
+
+Backward pitch is now 90 ground torque, 41 air torque, a 7.2 rad/s air limit, a 60 ms input ramp and a 3.5 rad/s grounded soft limit. Forward torque and its original response, suspension and gravity are retained. See [campaign details and verification](campaign.md).

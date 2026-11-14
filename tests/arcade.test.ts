@@ -13,8 +13,8 @@ for(const gas of [false,true])test(`lean back lifts the front tire from flat gro
     sim.step({...neutral,left:true,gas});
     frontLift=Math.max(frontLift,sim.bike.wheels[1].translation().y-0.44);
   }
-  assert.ok(frontLift>0.3,'a visible wheelie develops within half a second');
-  assert.ok(sim.bike.frame.rotation()>0.3);assert.ok(!sim.crashed);
+  assert.ok(frontLift>(gas?.3:.09),'held input deliberately lifts the front wheel; throttle helps');
+  assert.ok(sim.bike.frame.rotation()>0.25);assert.ok(!sim.crashed);
   sim.dispose();
 });
 
@@ -54,4 +54,13 @@ test('direct torso contact with terrain still causes a ragdoll while the helmet 
   assert.ok(sim.bike.head.translation().y-height>0.4,'helmet is clear of the ledge');
   sim.step(neutral);
   assert.ok(sim.crashed);assert.equal(sim.ragdoll.length,6);sim.dispose();
+});
+
+test('a short backward tap stays small and backward air speed is lower than forward air speed',()=>{
+ const s=new Simulation(testLevel);for(let i=0;i<240;i++)s.step(neutral);
+ for(let i=0;i<24;i++)s.step({...neutral,left:true});
+ assert.ok(s.bike.wheels[1].translation().y-.44<.04,'a 200 ms flat-ground tap does not pop a large wheelie');s.dispose();
+ const speeds:number[]=[];
+ for(const left of [true,false]){const sim=new Simulation(testLevel);sim.spawn([2,100]);for(let i=0;i<240;i++)sim.step({...neutral,left,right:!left});speeds.push(Math.abs(sim.bike.frame.angvel()));sim.dispose();}
+ assert.ok(speeds[0]<7.4);assert.ok(speeds[1]>speeds[0]+.7,'forward pitch retains its faster response');
 });

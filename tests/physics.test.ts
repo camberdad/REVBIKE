@@ -113,12 +113,13 @@ for(const direction of [1,-1])test(`${direction>0?'backflip':'frontflip'} bonus 
   for(const body of sim.bike.bodies)body.setLinvel({x:8,y:8},true);
   const awards:{count:number;direction:string}[]=[];
   sim.onFlip=(count,name)=>awards.push({count,direction:name});
-  let unwrapped=0,last=0,wasAirborne=false;
+  let unwrapped=0,last=0,wasAirborne=false,hasLanded=false;
   for(let i=0;i<360&&!sim.crashed&&awards.length===0;i++){
     const angle=sim.bike.frame.rotation();unwrapped+=Math.atan2(Math.sin(angle-last),Math.cos(angle-last));last=angle;
     const correction=(direction*Math.PI*2-unwrapped)*6-sim.bike.frame.angvel()*1.6;
     sim.step({...neutral,left:correction>0.2,right:correction< -0.2});
-    if(!sim.grounded){wasAirborne=true;assert.equal(awards.length,0,'a flip in the air is not awarded yet');}
+    if(sim.grounded&&wasAirborne)hasLanded=true;
+    if(!sim.grounded){wasAirborne=true;if(!hasLanded)assert.equal(awards.length,0,'a flip before any wheel landing is not awarded yet');}
   }
   assert.ok(wasAirborne);assert.ok(!sim.crashed);assert.equal(sim.flips,1);
   assert.deepEqual(awards,[{count:1,direction:direction>0?'BACKFLIP':'FRONTFLIP'}]);

@@ -23,7 +23,7 @@ Paste this into your website's HTML or Custom HTML block:
 ></iframe>
 ```
 
-The `?embed=1` option fills the iframe with the game and its HUD. Click **LET'S RIDE** inside the game to give it keyboard focus. Use a 16:9 iframe for the same viewport fit as Castle Rangers (1280�720 at the reference viewport); rendering scales to the available size and device pixel ratio. Portrait screens use the full available height. Touch controls appear automatically on touch devices.
+The `?embed=1` option fills the iframe with the game and its HUD. Click **LET'S RIDE** inside the game to give it keyboard focus. Use a 16:9 iframe for the same viewport fit as Castle Rangers (1280×720 at the reference viewport); rendering scales to the available size and device pixel ratio. Portrait screens use the full available height. Touch controls appear automatically on touch devices.
 
 GitHub Pages deploys automatically from `main` through `.github/workflows/deploy.yml`, after tests and a production build pass. The repository's Pages source is **GitHub Actions**. Assets use relative paths so the bike model, JavaScript, CSS, and favicon work under `/REVBIKE/` and other subdirectories. The built `dist/` can also be hosted on your own web server.
 
@@ -47,6 +47,7 @@ Open the local URL printed by Vite. `pnpm build` type-checks and produces a stan
 | Lean back / backflip | A / Left |
 | Lean forward / frontflip | D / Right |
 | Restart round from the beginning | R / toolbar restart |
+| Retry checkpoint, clock keeps running | C / crash dialog |
 | Pause / resume | P / Escape |
 | Start / retry | Enter / Space |
 
@@ -56,17 +57,23 @@ Gameplay settings persist in browser storage: Auto/display-refresh rendering or 
 
 ## Course and rules
 
-Level 1, **Redrock Ridge**, includes spline ramps, gaps, a vertical loop, TNT barrels, spinning saws, spike pits, four checkpoints, and a finish gate. Run time determines three stars under 32s, two under 45s, or one under 65s. Each complete airborne 360° rotation earns **−0.5s**, after a clean wheel landing. A short landing confirmation prevents awarding a crash as a clean flip. Partial rotations and riding around the loop do not earn a flip bonus.
+The campaign has **25 unlocked courses across five environments**. Level Select has five environment tabs, per-course best times and stars, and Gold/Silver/Bronze targets. Each course has three or four authored stunt sections, two checkpoints and a finish gate. Direct links use `?level=1` through `?level=25`; `?embed=1&level=19` works too. The original course remains at `?course=classic`. [All courses and mechanisms](docs/campaign.md).
 
-Head contact with track geometry crashes immediately. TNT, saws, spikes, and falling out of the course also crash. Crashes detach a six-body jointed ragdoll and emit particles. **R always starts a fresh round at the original starting line**, clearing the timer, flip bonuses, checkpoint progress, exploded hazards, velocities, and ragdoll. Checkpoints mark progress through the current round. Best completed times and gameplay preferences persist across restarts.
+A clean completed flip earns **−0.5s** after a safe landing grace window. Steep takeoffs and sloped landings are accounted for, and a safe suspension rebound keeps the bonus. Loop riding and partial bumps do not score flips. Head/torso contact, active hazards and falling out of bounds trigger a six-body ragdoll crash.
+
+**R always resets the whole selected round**: time, flip bonuses, both checkpoints, moving decks, broken bridges, explosives, rocks, loop gates and the rider. **C retries the latest checkpoint with the clock running**, restoring the bike and complete mechanism/hazard state. The flip bonus rolls back to its checkpoint value to prevent retry farming. Best times and settings persist.
 
 ## Implementation
 
 - `src/physics.ts`: a chassis, two suspension carriers, and two independent circular wheels. Prismatic joints with spring motors provide limited, damped suspension travel. Revolute axle joints allow the wheels to spin. Bike parts do not collide with one another. Terrain uses continuous polylines; CCD protects fast-moving bodies.
 - `src/render.ts`: procedural scenery, extruded track meshes, hazard meshes, rider and ragdoll rendering, shadows, particles, and the camera. The rider and bike dynamics remain locked to Z = 0; mesh thickness adds visual depth.
-- `src/level1.json`: all track control points, hazards, checkpoint locations, loop geometry, spawn, finish, and star thresholds.
+- `src/campaign.json`: 25 authored course recipes and medal targets.
+- `src/campaign.ts`: smooth geometry, mechanism placement, checkpoints, props and environment palettes.
+- `src/machines.ts`: seesaws, flex decks, lifts, rollers, belts, spring/boost pads, breakable bridges and magnetic rails.
+- `src/scenery.ts`: procedural scenery and set-piece props for all five environments.
+- `src/level1.json`: retained original Redrock Ridge course.
 - `src/track.ts`: monotone cubic Hermite ramp sampling and loop generation. `?course=test` loads the flat-ground/single-ramp test course.
-- `src/main.ts`: fixed-step game loop, controls, checkpoint progress, timer, bonuses, full-round restarts, pause/results dialogs, accessibility, responsive HUD, and bottom tabs.
+- `src/main.ts`: fixed-step game loop, controls, checkpoint progress, timer, bonuses, full-round restarts, pause/results dialogs, accessibility, responsive HUD, level grid, environment tabs, medal results and saved progress.
 - `src/settings.ts`: validated preferences, blood amount definitions, and rendering-only frame limiting.
 - `src/audio.ts`: browser-generated sound; no downloaded audio assets.
 
@@ -100,6 +107,8 @@ The regression tests exercise flat-ground settling, ramp traversal, both lean di
 
 ## Release versions
 
-A faint version label appears in the lower-right corner of the course, above the status bar. Hover it to see the source commit. Every new GitHub Pages deployment automatically receives `1.1.<GITHUB_RUN_NUMBER>`; the workflow run number increases for every new push or manual deployment. Retrying the same workflow keeps its release number. Local previews show `1.1.0-dev`. The build also publishes `version.json` containing the version and commit for verification. To start a new major/minor release line, change those two components in `package.json`; no manual patch bump is needed.
+A faint version label appears in the lower-right corner of the course, above the status bar. Hover it to see the source commit. Every new GitHub Pages deployment automatically receives `1.2.<GITHUB_RUN_NUMBER>`; the workflow run number increases for every new push or manual deployment. Retrying the same workflow keeps its release number. Local previews show `1.2.0-dev`. The build also publishes `version.json` containing the version and commit for verification. To start a new major/minor release line, change those two components in `package.json`; no manual patch bump is needed.
 
-The arcade camera uses a 19.5 m vertical span on landscape screens (previously 13.5 m), with damped velocity look-ahead in X and a small capped vertical lead. Pitch controls use 96 ground wheelie torque, 72 forward ground torque, 48 air torque, a soft 8.5 rad/s spin limit, and neutral-input angular braking. The spring is 235 N/m with 20/11 compression/rebound damping and 0.12 tire restitution. Tire landings have no impact-speed or pitch-angle ejection threshold; inset head/torso terrain contact, hazards, and falling out of the course cause crashes. The arcade regressions verify standing/throttle wheelies, smooth release braking in both directions, bouncing tire landings from 4/6/9 m, and direct torso crashes.
+The arcade camera uses a 19.5 m vertical span on landscape screens (previously 13.5 m), with damped velocity look-ahead in X and a small capped vertical lead. Pitch controls use 90 ground wheelie torque, 72 forward ground torque, 41 backward / 48 forward air torque, and separate 7.2 backward / 8.5 forward rad/s soft limits, and neutral-input angular braking. The spring is 235 N/m with 20/11 compression/rebound damping and 0.12 tire restitution. Tire landings have no impact-speed or pitch-angle ejection threshold; inset head/torso terrain contact, hazards, and falling out of the course cause crashes. The arcade regressions verify standing/throttle wheelies, smooth release braking in both directions, bouncing tire landings from 4/6/9 m, and direct torso crashes.
+
+The campaign tests drive all 25 courses to their finish gates using ordinary throttle/brake/lean inputs, collect both checkpoints, and traverse every authored loop and inverted rail. Dedicated tests cover the moving mechanisms, smooth curve normals, single/double canyon backflips and their clean landing bonuses. A browser playthrough completed First Ride in 36.31 seconds, earned Gold/three stars, and verified the saved time in Level Select after navigating to Level 2.

@@ -3,6 +3,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { BIKE_DIMENSIONS, type Simulation } from './physics';
 import { sampleSegment, loopPoints, type Level, type Point } from './track';
 import { DEFAULT_SETTINGS, bloodParticleCount, type GameSettings } from './settings';
+import {themeFor} from './campaign';
+import {buildCampaignScenery} from './scenery';
 
 const colors={ink:0x28342f, road:0x485047, dirt:0xa78b78, edge:0xdfd0ad, lime:0xd8ef68, orange:0xfa693e, metal:0x9ba8a1};
 const material=(color:number,roughness=0.8)=>new THREE.MeshStandardMaterial({color,roughness,metalness:0.05});
@@ -44,6 +46,8 @@ export class GameRenderer {
   private rearSpring!:THREE.Mesh;
   private forkSleeves:THREE.Mesh[]=[];
   hazardMeshes:THREE.Group[]=[];
+  machineMeshes:THREE.Group[]=[];
+  private hazardCables=new Map<number,THREE.Mesh>();
   checkpointFlags:THREE.Group[]=[];
   scenery=new THREE.Group();
   farScenery=new THREE.Group();
@@ -70,7 +74,8 @@ export class GameRenderer {
     Object.assign(this.light.shadow.camera,{left:-24,right:24,top:22,bottom:-16,near:1,far:65});
     this.light.shadow.bias=-0.0003;this.light.shadow.normalBias=0.04;
     this.scene.add(this.light,this.light.target);
-    this.buildScenery();this.buildTerrain();this.buildBike();this.buildHazards();this.buildMarkers();
+    if(level.id){const theme=themeFor(level);mats.road.color.setHex(theme.road);mats.dirt.color.setHex(theme.dirt);mats.edge.color.setHex(theme.accent);}
+    this.buildScenery();this.buildTerrain();this.buildBike();this.buildHazards();this.buildMachines();this.buildMarkers();
     this.modelReady=this.loadBikeModel();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas.parentElement!);this.resize();
   }
@@ -120,21 +125,26 @@ export class GameRenderer {
       for(let x=Math.ceil(min/1.8)*1.8;x<max;x+=1.8){
         const p=points.reduce((a,b)=>Math.abs(b[0]-x)<Math.abs(a[0]-x)?b:a);
         if(x>0 && x<max-1) {
-          const stone=mesh(new THREE.DodecahedronGeometry(0.12+(Math.sin(x*7)+1)*0.07),material(0x897665),this.scene,x,p[1]-0.7-(Math.sin(x*4)+1)*1.5,1.01);
+          const stone=mesh(new THREE.DodecahedronGeometry(0.12+(Math.sin(x*7)+1)*0.07),material(this.level.environment==='neon'||this.level.environment==='construction'?0x647580:0x897665),this.scene,x,p[1]-0.7-(Math.sin(x*4)+1)*1.5,1.01);
           stone.scale.set(1.8,0.6,0.4);
         }
       }
     }
-    if(this.level.loop){
-      const points=loopPoints(this.level.loop);this.ribbon(points,0.24,mats.road,1.7);
+    for(const loop of [...(this.level.loop?[this.level.loop]:[]),...(this.level.loops??[])]){
+      const points=loopPoints(loop);this.ribbon(points,0.24,mats.road,1.7);
       const curve=new THREE.CatmullRomCurve3(points.map(([x,y])=>new THREE.Vector3(x,y-0.02,0.96)),true);
       mesh(new THREE.TubeGeometry(curve,160,0.07,6,true),mats.edge,this.scene);
-      const {x,y,radius:r}=this.level.loop;
+      const {x,y,radius:r}=loop;
       for(const dx of [-r*0.68,r*0.68]){
         rod(this.scene,[x+dx,-0.4,-0.75],[x+dx,y+r*0.66,-0.75],0.1,mats.metal);
         rod(this.scene,[x+dx,-0.4,-0.75],[x,y+r,-0.75],0.07,mats.metal);
       }
       this.sign('LOOP / 02',x,y+r+1.2,4.2,0.8);
+    }
+    for(const points of this.level.paths??[]){
+      this.ribbon(points,.2,mats.metal,1.6);
+      const curve=new THREE.CatmullRomCurve3(points.map(([x,y])=>new THREE.Vector3(x,y,.85)));
+      mesh(new THREE.TubeGeometry(curve,points.length*2,.07,5,false),new THREE.MeshBasicMaterial({color:0x52f3ef}),this.scene);
     }
   }
 
@@ -207,6 +217,7 @@ export class GameRenderer {
   }
 
   private buildScenery(){
+    if(this.level.id){buildCampaignScenery(this.scene,this.scenery,this.farScenery,this.level);return;}
     this.scene.add(this.scenery,this.farScenery);
     const random=(n:number)=>{const a=Math.sin(n*127.1+311.7)*43758.5453;return a-Math.floor(a);};
     const mountain=(x:number,y:number,w:number,h:number,color:number,z:number,parent:THREE.Object3D)=>{
@@ -247,13 +258,28 @@ export class GameRenderer {
   }
 
   private buildHazards(){
-    this.level.hazards.forEach(h=>{
+    this.level.hazards.forEach((h,index)=>{
       const group=new THREE.Group();group.position.set(h.x,h.y,0);this.scene.add(group);this.hazardMeshes.push(group);
       if(h.type==='tnt'){
         mesh(new THREE.CylinderGeometry(0.38,0.38,1.04,14),mats.orange,group);
         for(const y of [-0.39,0.39])mesh(new THREE.TorusGeometry(0.38,0.035,5,14),mats.ink,group,0,y,0).rotation.x=Math.PI/2;
         mesh(new THREE.PlaneGeometry(0.55,0.34),label('TNT','#f1e9cf','#343c32',256,128),group,0,0,0.39);
         rod(group,[0,0.52,0],[0.15,0.75,0],0.022,mats.ink);
+      }else if(['mud','lava','laser'].includes(h.type)){
+        box(group,h.width??8,.3,2.2,new THREE.MeshBasicMaterial({color:h.type==='lava'?0xff622b:h.type==='laser'?0xfb43c6:0x536e81}));
+        if(h.type==='laser')for(let j=0;j<4;j++)box(group,h.width??8,.05,.1,new THREE.MeshBasicMaterial({color:0xffa9ed}),0,.15+j*.2,.3);
+      }else if(h.type==='crusher'){
+        box(group,h.width??3,2.4,2,mats.metal);box(group,h.width??3,.2,2.1,mats.lime,0,-1.2);
+        rod(this.scene,[h.x,12,-.5],[h.x,h.y,-.5],.18,mats.metal);
+        for(let j=0;j<4;j++)box(group,.3,2.4,2.15,mats.ink,-1.1+j*.7,0).rotation.z=-.3;
+      }else if(['boulder','wrecking','axe'].includes(h.type)){
+        const r=h.radius??1;
+        if(h.type==='boulder')mesh(new THREE.DodecahedronGeometry(r,1),material(0x63504a),group);
+        else{
+          ball(group,r,h.type==='axe'?mats.saw:mats.ink);
+          if(h.type==='axe'){box(group,r*2.4,.35,.25,mats.saw,0,0,.2);box(group,.18,2,.25,mats.metal,0,1);}
+          const cable=rod(this.scene,[h.x,h.anchorY??h.y+6,0],[h.x,h.y,0],.06,mats.metal);this.hazardCables.set(index,cable);
+        }
       }else if(h.type==='spikes'){
         const w=h.width??4;box(group,w,0.22,1.5,mats.ink,0,-0.34);
         for(let x=-w/2+0.2;x<w/2;x+=0.5){
@@ -275,6 +301,24 @@ export class GameRenderer {
     });
   }
 
+  private buildMachines(){
+    for(const m of this.level.mechanisms??[]){
+      const group=new THREE.Group();group.position.set(m.x,m.y,0);this.scene.add(group);this.machineMeshes.push(group);
+      const neon=this.level.environment==='neon',deck=m.kind==='spring'?material(0xeed552):m.kind==='boost'?material(0x59e6d5):m.kind==='collapse'&&neon?new THREE.MeshStandardMaterial({color:0x75e8eb,transparent:true,opacity:.65}):m.kind==='seesaw'||m.kind==='collapse'?material(0x9a6840):mats.metal;
+      if(m.kind==='roller'){
+        const roller=mesh(new THREE.CylinderGeometry(m.width/2,m.width/2,1.8,24),mats.metal,group);roller.rotation.x=Math.PI/2;
+        for(const a of [0,Math.PI/2,Math.PI,Math.PI*1.5])box(group,.1,m.width,.08,mats.orange,0,0,1).rotation.z=a;
+      }else{
+        box(group,m.width,.32,1.9,deck);
+        for(let x=-m.width/2+.5;x<m.width/2;x+=1.2)box(group,.08,.34,2,mats.ink,x,0);
+        if(m.kind==='conveyor'||m.kind==='boost')for(let x=-m.width/2+1;x<m.width/2;x+=2.5){const arrow=mesh(new THREE.ConeGeometry(.25,.55,3),mats.lime,group,x,.22,1);arrow.rotation.z=(m.speed??1)>0?-Math.PI/2:Math.PI/2;}
+        if(m.kind==='seesaw'||m.kind==='flex'){const support=mesh(new THREE.ConeGeometry(.6,1.5,4),mats.metal,this.scene,m.x,m.y-.85,-.3);support.rotation.y=Math.PI/4;}
+        if(m.kind==='lift'){rod(this.scene,[m.x,m.y-2,-.8],[m.x,m.y+(m.rise??7),-.8],.17,mats.metal);box(this.scene,1.8,.5,2,mats.ink,m.x,m.y-1.8,-.3);}
+        if(m.kind==='spring')for(let j=0;j<5;j++)mesh(new THREE.TorusGeometry(.4,.05,6,12),mats.metal,this.scene,m.x,m.y-.25-j*.15,-.2).rotation.x=Math.PI/2;
+      }
+    }
+  }
+
   private sign(text:string,x:number,y:number,width:number,height:number,bg='#d8ef68',fg='#28342f'){
     const group=new THREE.Group();group.position.set(x,y,-1.2);this.scene.add(group);
     mesh(new THREE.PlaneGeometry(width,height),label(text,bg,fg),group,0,0,0.1);
@@ -283,10 +327,12 @@ export class GameRenderer {
   }
 
   private buildMarkers(){
+    if(!this.level.id){
     this.sign('SEND IT.',9,3.7,3.2,0.9);
     for(const x of [7.8,10.2])rod(this.scene,[x,0,-1.3],[x,3.25,-1.3],0.06,mats.ink);
     this.sign('01 / FIRST FLIGHT',21,6.9,4.6,0.7,'#f0ead5','#485047');
     this.sign('MIND THE GAP →',49,7.2,4.4,0.7,'#f0ead5','#485047');
+    }else for(const [i,piece]of this.level.setPieces!.entries())this.sign(`${i+1} / ${piece.name.toUpperCase()}`,piece.x+7,4.5,Math.min(6.5,piece.name.length*.26),.65);
     for(const [index,[x,y]]of this.level.checkpoints.entries()){
       const group=new THREE.Group();group.position.set(x,y,-0.65);this.scene.add(group);
       rod(group,[0,-0.2,0],[0,2.7,0],0.045,mats.ink);
@@ -309,12 +355,12 @@ export class GameRenderer {
     const p=this.level.checkpoints[index];if(p)this.burst(p[0],p[1]+2,colors.lime,14,3);
   }
 
-  reset(){
+  reset(position?:{x:number;y:number}){
     this.clearParticles();this.shake=0;
     for(const group of this.hazardMeshes)group.visible=true;
     for(const group of this.checkpointFlags)(group.children[1] as THREE.Mesh).material=material(0xc5c5ac);
     this.rider.visible=true;
-    this.target.set(7,3,0);
+    this.target.set(position?position.x+5:7,position?Math.max(3,position.y+1.7):3,0);
   }
 
   applySettings(settings:GameSettings){
@@ -411,9 +457,13 @@ export class GameRenderer {
     });
     this.syncRagdoll(sim);
     this.hazardMeshes.forEach((group,i)=>{
+      const body=sim.hazardBodies[i],p=body.translation();group.position.set(p.x,p.y,0);
+      if(['wrecking','axe','boulder'].includes(sim.level.hazards[i].type))group.rotation.z=body.rotation();
       if(sim.level.hazards[i].type==='saw')group.rotation.z-=dt*5;
       if(sim.exploded.has(i))group.visible=false;
+      const cable=this.hazardCables.get(i);if(cable){const h=this.level.hazards[i],top=new THREE.Vector3(h.x,h.anchorY??h.y+6,0),end=new THREE.Vector3(p.x,p.y,0),d=end.clone().sub(top);cable.position.copy(top.add(end).multiplyScalar(.5));cable.scale.y=d.length()/(h.anchorY! -h.y);cable.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());}
     });
+    this.machineMeshes.forEach((group,i)=>{const machine=sim.machines.items[i],p=machine.body.translation();group.position.set(p.x,p.y,0);group.rotation.z=machine.body.rotation();group.visible=p.y>-15;});
     if(playing && !sim.crashed && sim.grounded && Math.abs(frame.linvel().x)>3){
       this.dustClock+=dt;
       if(this.dustClock>0.045){this.dustClock=0;const wp=wheels[0].translation();

@@ -1,0 +1,254 @@
+[
+  {
+    "id": 1,
+    "name": "First Ride",
+    "pieces": [
+      "rolling",
+      "kicker",
+      "downhill"
+    ],
+    "targetSeconds": 38
+  },
+  {
+    "id": 2,
+    "name": "Barn Yard Hop",
+    "pieces": [
+      "hay",
+      "bridge",
+      "backflip"
+    ],
+    "targetSeconds": 40
+  },
+  {
+    "id": 3,
+    "name": "The Teeter-Totter",
+    "pieces": [
+      "seesaw",
+      "seesaw",
+      "climb"
+    ],
+    "targetSeconds": 43
+  },
+  {
+    "id": 4,
+    "name": "Rolling Whoops",
+    "pieces": [
+      "whoops",
+      "drop",
+      "barn"
+    ],
+    "targetSeconds": 42
+  },
+  {
+    "id": 5,
+    "name": "Countryside Finale",
+    "pieces": [
+      "downhill",
+      "logs",
+      "tractor",
+      "landing"
+    ],
+    "targetSeconds": 48
+  },
+  {
+    "id": 6,
+    "name": "Container Yard",
+    "pieces": [
+      "containers",
+      "containers",
+      "flex"
+    ],
+    "targetSeconds": 42
+  },
+  {
+    "id": 7,
+    "name": "Wrecking Ball",
+    "pieces": [
+      "wrecking",
+      "wrecking",
+      "crane"
+    ],
+    "targetSeconds": 45
+  },
+  {
+    "id": 8,
+    "name": "Hydraulic Lifts",
+    "pieces": [
+      "lift",
+      "lift",
+      "scaffold"
+    ],
+    "targetSeconds": 46
+  },
+  {
+    "id": 9,
+    "name": "Pipe Rollers & TNT",
+    "pieces": [
+      "rollers",
+      "tnt",
+      "bridge"
+    ],
+    "targetSeconds": 46
+  },
+  {
+    "id": 10,
+    "name": "Skyscraper Leap",
+    "pieces": [
+      "girders",
+      "slide",
+      "skyscraper"
+    ],
+    "targetSeconds": 49
+  },
+  {
+    "id": 11,
+    "name": "Minecart Rails",
+    "pieces": [
+      "halfpipe",
+      "halfpipe",
+      "canyon"
+    ],
+    "targetSeconds": 43
+  },
+  {
+    "id": 12,
+    "name": "Rockslide Run",
+    "pieces": [
+      "rockslide",
+      "downhill",
+      "rockramp"
+    ],
+    "targetSeconds": 44
+  },
+  {
+    "id": 13,
+    "name": "The First Loop",
+    "pieces": [
+      "downhill",
+      "loop",
+      "climb45"
+    ],
+    "targetSeconds": 44
+  },
+  {
+    "id": 14,
+    "name": "Collapsing Bridges",
+    "pieces": [
+      "collapse",
+      "collapse",
+      "cavern"
+    ],
+    "targetSeconds": 46
+  },
+  {
+    "id": 15,
+    "name": "Canyon Mega-Stunt",
+    "pieces": [
+      "tunnel",
+      "doubleflip",
+      "mineexit"
+    ],
+    "targetSeconds": 49
+  },
+  {
+    "id": 16,
+    "name": "Conveyor Gauntlet",
+    "pieces": [
+      "forwardbelt",
+      "reversebelt",
+      "lasers"
+    ],
+    "targetSeconds": 44
+  },
+  {
+    "id": 17,
+    "name": "Crusher Alley",
+    "pieces": [
+      "crusher",
+      "crusher",
+      "grate"
+    ],
+    "targetSeconds": 46
+  },
+  {
+    "id": 18,
+    "name": "Bounce Pads",
+    "pieces": [
+      "spring",
+      "spring",
+      "saws"
+    ],
+    "targetSeconds": 46
+  },
+  {
+    "id": 19,
+    "name": "Double Loop-de-Loop",
+    "pieces": [
+      "downhill",
+      "doubleloop",
+      "saws"
+    ],
+    "targetSeconds": 49
+  },
+  {
+    "id": 20,
+    "name": "Reactor Core Escape",
+    "pieces": [
+      "glass",
+      "boost",
+      "quarter"
+    ],
+    "targetSeconds": 50
+  },
+  {
+    "id": 21,
+    "name": "Lava Lake Skim",
+    "pieces": [
+      "platforms",
+      "platforms",
+      "precision"
+    ],
+    "targetSeconds": 45
+  },
+  {
+    "id": 22,
+    "name": "Ring of Fire",
+    "pieces": [
+      "hoops",
+      "axes",
+      "hoops"
+    ],
+    "targetSeconds": 48
+  },
+  {
+    "id": 23,
+    "name": "Inverted Ceiling Track",
+    "pieces": [
+      "magnet",
+      "magnet",
+      "drop"
+    ],
+    "targetSeconds": 49
+  },
+  {
+    "id": 24,
+    "name": "Volcano Eruption",
+    "pieces": [
+      "tnt",
+      "saws",
+      "spring",
+      "volcanic"
+    ],
+    "targetSeconds": 53
+  },
+  {
+    "id": 25,
+    "name": "The Ultimate Stunt Finale",
+    "pieces": [
+      "downhill",
+      "loopfinale",
+      "runway"
+    ],
+    "targetSeconds": 55
+  }
+]

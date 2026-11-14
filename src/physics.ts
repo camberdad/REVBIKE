@@ -1,15 +1,17 @@
 import RAPIER from '@dimforge/rapier2d-compat';
 import { sampleSegment, loopPoints, type Level, type Point } from './track';
+import { CourseMachines, type MachinesSnapshot } from './machines';
 
 export { RAPIER };
 export const STEP = 1/120;
 const BIKE = 0x00010002, GROUND = 0x00020001;
 export const BIKE_DIMENSIONS = {wheelRadius:0.44, wheelOffsets:[-0.94,0.94] as const,
   suspensionAnchorY:-0.22, fullDroopAxleY:-1.0, fullBumpAxleY:-0.34, freeAxleY:-0.88};
-export const TUNING = { gravity:-22, rearTorque:26, leanTorque:72, wheelieTorque:96, airLeanTorque:48, airCounterTorque:56, maxWheelSpeed:76,
+export const TUNING = { gravity:-22, rearTorque:26, leanTorque:72, wheelieTorque:90, airLeanTorque:48, backwardAirTorque:41, airCounterTorque:56, maxWheelSpeed:76,
   springStiffness:235, compressionDamping:20, reboundDamping:11, wheelFriction:1.9, tireRestitution:0.12,
   groundAngularDamping:1.25, airAngularDamping:0.55, releaseAngularDamping:2.8,
-  releasePitchDrag:8, maxAirAngularSpeed:8.5, leanResponseTime:0.045, leanReleaseTime:0.025 };
+  releasePitchDrag:8, maxAirAngularSpeed:8.5, maxBackwardAngularSpeed:7.2, maxGroundWheelieSpeed:3.5,
+  leanResponseTime:0.045, backwardLeanResponseTime:0.06, leanReleaseTime:0.025 };
 export interface Controls { gas: boolean; brake: boolean; left: boolean; right: boolean }
 export interface Bike {
   frame: RAPIER.RigidBody; wheels: RAPIER.RigidBody[]; carriers: RAPIER.RigidBody[];
@@ -23,6 +25,9 @@ export interface SuspensionTelemetry {
 export interface BikeSnapshot {
   bodies: { x:number; y:number; angle:number; vx:number; vy:number; spin:number }[];
   loopPhase: Simulation['loopPhase'];
+  machines?:MachinesSnapshot; clock?:number; loops?:('approach'|'inside'|'complete')[];
+  hazards?:{x:number;y:number;vx:number;vy:number;angle:number;spin:number;dynamic:boolean}[];
+  activated?:number[];exploded?:number[];fuses?:[number,number][];
 }
 export class Simulation {
   world: RAPIER.World;
@@ -37,6 +42,7 @@ export class Simulation {
   private previousGrounded = true;
   private lastAngle = 0;
   airRotation = 0;
+  private takeoffPitch=0;
   airborneTime = 0;
   flips = 0;
   onCrash?: () => void;
@@ -47,27 +53,46 @@ export class Simulation {
   private loopColliders: RAPIER.Collider[]=[];
   private pendingFlip?: {count:number;direction:'BACKFLIP'|'FRONTFLIP';age:number};
   private leanInput=0;
+  machines:CourseMachines;
+  clock=0;
+  private magneticRails:{colliders:RAPIER.Collider[];index:number}[]=[];
+  private hazardActivated=new Set<number>();
+  private fuses=new Map<number,number>();
+  campaignLoops:{definition:NonNullable<Level['loop']>;colliders:RAPIER.Collider[];phase:'approach'|'inside'|'complete'}[]=[];
 
   constructor(public level: Level) {
     this.world = new RAPIER.World({x:0,y:TUNING.gravity});
     this.world.timestep = STEP;
     this.world.numSolverIterations = 10;
     for (const segment of level.segments) this.addSurface(sampleSegment(segment));
+    for(const points of level.paths??[]){
+      const index=level.magneticPaths?.indexOf(points)??-1;
+      if(index>=0){const colliders=[this.addSurface(points.slice(0,101)),this.addSurface(points.slice(100))];colliders[1].setCollisionGroups(0);this.magneticRails.push({colliders,index});}
+      else this.addSurface(points);
+    }
+    for(const definition of level.loops??[]){
+      const points=loopPoints(definition),half=(points.length-1)/2;
+      const colliders=[this.addSurface(points.slice(0,half+1)),this.addSurface(points.slice(half))];
+      colliders[1].setCollisionGroups(0);this.campaignLoops.push({definition,colliders,phase:'approach'});
+    }
     if (level.loop) {
-      const points=loopPoints(level.loop);
-      this.loopColliders=[this.addSurface(points.slice(0,81)),this.addSurface(points.slice(80))];
+      const points=loopPoints(level.loop),half=(points.length-1)/2;
+      this.loopColliders=[this.addSurface(points.slice(0,half+1)),this.addSurface(points.slice(half))];
       this.loopColliders[1].setCollisionGroups(0);
     }
     level.hazards.forEach((hazard,i) => {
-      const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(hazard.x,hazard.y));
+      const moving=['wrecking','axe','crusher','boulder'].includes(hazard.type);
+      const body=this.world.createRigidBody((moving?RAPIER.RigidBodyDesc.kinematicPositionBased():RAPIER.RigidBodyDesc.fixed()).setTranslation(hazard.x,hazard.y).setCcdEnabled(true));
       this.hazardBodies.push(body);
       let desc: RAPIER.ColliderDesc;
-      if (hazard.type === 'spikes') desc=RAPIER.ColliderDesc.cuboid((hazard.width??4)/2,0.45);
-      else if (hazard.type === 'saw') desc=RAPIER.ColliderDesc.ball((hazard.radius??1)*0.95);
+      if (['spikes','mud','lava','laser'].includes(hazard.type)) desc=RAPIER.ColliderDesc.cuboid((hazard.width??4)/2,hazard.type==='spikes'?.45:.25);
+      else if (['saw','wrecking','axe','boulder'].includes(hazard.type)) desc=RAPIER.ColliderDesc.ball((hazard.radius??1)*0.95);
+      else if(hazard.type==='crusher')desc=RAPIER.ColliderDesc.cuboid((hazard.width??3)/2,1.2);
       else desc=RAPIER.ColliderDesc.cuboid(0.38,0.52);
-      const collider=this.world.createCollider(desc.setSensor(true).setCollisionGroups(GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),body);
+      const collider=this.world.createCollider(desc.setSensor(hazard.type!=='boulder').setFriction(1.2).setMass(12).setCollisionGroups(hazard.type==='boulder'?0x00030003:GROUND).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),body);
       this.hazards.set(collider.handle,i);
     });
+    this.machines=new CourseMachines(this.world,level,this.terrain);
     this.spawn(level.spawn);
   }
 
@@ -137,7 +162,8 @@ export class Simulation {
   }
 
   captureCheckpoint(): BikeSnapshot {
-    return {loopPhase:this.loopPhase,bodies:this.bike.bodies.map(body=>{
+    return {loopPhase:this.loopPhase,machines:this.machines.capture(),clock:this.clock,loops:this.campaignLoops.map(l=>l.phase),
+      hazards:this.hazardBodies.map(b=>{const p=b.translation(),v=b.linvel();return {x:p.x,y:p.y,vx:v.x,vy:v.y,angle:b.rotation(),spin:b.angvel(),dynamic:b.isDynamic()};}),activated:[...this.hazardActivated],exploded:[...this.exploded],fuses:[...this.fuses],bodies:this.bike.bodies.map(body=>{
       const p=body.translation(),v=body.linvel();
       return {x:p.x,y:p.y,angle:body.rotation(),vx:v.x,vy:v.y,spin:body.angvel()};
     })};
@@ -145,6 +171,10 @@ export class Simulation {
 
   restoreCheckpoint(snapshot:BikeSnapshot){
     this.spawn([snapshot.bodies[0].x,snapshot.bodies[0].y]);
+    if(snapshot.machines)this.machines.restore(snapshot.machines);
+    this.clock=snapshot.clock??this.clock;this.hazardActivated=new Set(snapshot.activated);this.exploded=new Set(snapshot.exploded);this.fuses=new Map(snapshot.fuses);
+    snapshot.loops?.forEach((phase,i)=>{const loop=this.campaignLoops[i];loop.phase=phase;loop.colliders.forEach((c,j)=>c.setCollisionGroups(phase==='complete'||(j===1&&phase==='approach')?0:GROUND));});
+    snapshot.hazards?.forEach((s,i)=>{const b=this.hazardBodies[i];b.setBodyType(s.dynamic?RAPIER.RigidBodyType.Dynamic:['wrecking','axe','crusher','boulder'].includes(this.level.hazards[i].type)?RAPIER.RigidBodyType.KinematicPositionBased:RAPIER.RigidBodyType.Fixed,true);b.setTranslation({x:s.x,y:s.y},true);b.setRotation(s.angle,true);b.setLinvel({x:s.vx,y:s.vy},true);b.setAngvel(s.spin,true);b.collider(0).setCollisionGroups(this.exploded.has(i)?0:this.level.hazards[i].type==='boulder'?0x00030003:GROUND);});
     snapshot.bodies.forEach((saved,i)=>{
       const body=this.bike.bodies[i];body.setTranslation({x:saved.x,y:saved.y},true);body.setRotation(saved.angle,true);
       body.setLinvel({x:saved.vx,y:saved.vy},true);body.setAngvel(saved.spin,true);
@@ -154,6 +184,13 @@ export class Simulation {
   }
 
   step(input: Controls) {
+    this.clock+=STEP;
+    this.updateHazards();
+    for(const loop of this.campaignLoops){
+      const p=this.bike.frame.translation(),d=loop.definition;
+      if(loop.phase==='approach'&&p.y>d.y&&p.x>d.x-1){loop.phase='inside';loop.colliders[1].setCollisionGroups(GROUND);}
+      if(loop.phase==='inside'&&p.x>d.x-1.3&&p.x<d.x+1&&p.y<d.y-d.radius+1.8&&this.bike.frame.linvel().x>0){loop.phase='complete';loop.colliders.forEach(c=>c.setCollisionGroups(0));}
+    }
     if(this.level.loop && this.loopPhase!=='complete'){
       const p=this.bike.frame.translation(),loop=this.level.loop;
       // The two track lanes cross at the base. Gate the crossing in 2D so the
@@ -167,6 +204,8 @@ export class Simulation {
     }
     if (!this.crashed) {
       const {frame,wheels}=this.bike;
+      this.machines.step(this.bike);
+      for(const rail of this.magneticRails){const done=this.machines.magnetDone.has(rail.index),progress=this.machines.magnetProgress[rail.index]??0;rail.colliders[0].setCollisionGroups(done?0:GROUND);rail.colliders[1].setCollisionGroups(!done&&progress>75?GROUND:0);}
       const d=BIKE_DIMENSIONS;
       for(const [i,wheel] of this.getSuspensionTelemetry().entries()){
         this.bike.suspensionJoints[i].configureMotorPosition(d.freeAxleY-d.suspensionAnchorY,TUNING.springStiffness,
@@ -181,15 +220,17 @@ export class Simulation {
         }
       }
       const lean=Number(input.left)-Number(input.right),airborne=!this.grounded&&this.airborneTime>0.04;
-      this.leanInput+=(lean-this.leanInput)*(1-Math.exp(-STEP/(lean?TUNING.leanResponseTime:TUNING.leanReleaseTime)));
+      this.leanInput+=(lean-this.leanInput)*(1-Math.exp(-STEP/(lean>0?TUNING.backwardLeanResponseTime:lean<0?TUNING.leanResponseTime:TUNING.leanReleaseTime)));
       frame.setAngularDamping(lean?(airborne?TUNING.airAngularDamping:TUNING.groundAngularDamping):TUNING.releaseAngularDamping);
       const omega=frame.angvel();
-      let torque=this.leanInput*(airborne?(this.leanInput*omega<0?TUNING.airCounterTorque:TUNING.airLeanTorque):this.leanInput>0?TUNING.wheelieTorque:TUNING.leanTorque);
+      let torque=this.leanInput*(airborne?(this.leanInput*omega<0?TUNING.airCounterTorque:this.leanInput>0?TUNING.backwardAirTorque:TUNING.airLeanTorque):this.leanInput>0?TUNING.wheelieTorque:TUNING.leanTorque);
       // Frame damping alone cannot stop the angular momentum of the whole rig.
       // A light chassis brake also slows the orbiting axles, never wheel spin.
-      if(!lean)torque-=omega*TUNING.releasePitchDrag;
-      if(airborne&&torque*omega>0)torque*=Math.max(0,Math.min(1,(TUNING.maxAirAngularSpeed-Math.abs(omega))/1.5));
-      if(airborne&&Math.abs(omega)>TUNING.maxAirAngularSpeed)torque-=Math.sign(omega)*(Math.abs(omega)-TUNING.maxAirAngularSpeed)*8;
+      if(!lean&&!this.machines.magnetic)torque-=omega*TUNING.releasePitchDrag;
+      if(this.machines.magnetic)torque=0;
+      const limit=omega>0?(airborne?TUNING.maxBackwardAngularSpeed:TUNING.maxGroundWheelieSpeed):TUNING.maxAirAngularSpeed;
+      if((airborne||lean>0)&&torque*omega>0)torque*=Math.max(0,Math.min(1,(limit-Math.abs(omega))/1.5));
+      if(airborne&&Math.abs(omega)>limit)torque-=Math.sign(omega)*(Math.abs(omega)-limit)*8;
       frame.applyTorqueImpulse(torque*STEP,true);
       const speed=frame.linvel();
       if (Math.abs(speed.x)>29) frame.applyImpulse({x:-Math.sign(speed.x)*(Math.abs(speed.x)-29)*14*STEP,y:0},true);
@@ -199,9 +240,13 @@ export class Simulation {
     this.events.drainCollisionEvents((a,b,started) => {
       if (!started || this.crashed) return;
       const rider=[this.bike.head.handle,this.bike.torso.handle];
-      if ((rider.includes(a) && this.terrain.has(b)) || (rider.includes(b) && this.terrain.has(a))) crashRequested=true;
+      if (!this.machines.magnetic&&((rider.includes(a) && this.terrain.has(b)) || (rider.includes(b) && this.terrain.has(a)))) crashRequested=true;
       const hazardIndex=this.hazards.get(a) ?? this.hazards.get(b);
       if (hazardIndex!==undefined && !this.exploded.has(hazardIndex)) {
+        const other=this.hazards.has(a)?b:a,parent=this.world.getCollider(other)?.parent();
+        if(!parent||!this.bike.bodies.some(body=>body.handle===parent.handle))return;
+        const h=this.level.hazards[hazardIndex];
+        if(h.type==='tnt'&&h.delay){if(!this.fuses.has(hazardIndex))this.fuses.set(hazardIndex,h.delay);return;}
         if (this.level.hazards[hazardIndex].type==='tnt') {
           this.exploded.add(hazardIndex); this.onExplosion?.(hazardIndex);
         }
@@ -221,9 +266,16 @@ export class Simulation {
     const angle=this.bike.frame.rotation();
     const delta=Math.atan2(Math.sin(angle-this.lastAngle),Math.cos(angle-this.lastAngle));
     this.lastAngle=angle;
-    if (!this.grounded && !this.crashed) { this.airRotation+=delta; this.airborneTime+=STEP; }
+    if (!this.grounded && !this.crashed) {
+      if(this.previousGrounded)this.takeoffPitch=Math.atan2(Math.sin(angle),Math.cos(angle));
+      this.airRotation+=delta; this.airborneTime+=STEP;
+    }
     if (this.grounded && !this.previousGrounded) {
-      const count=Math.floor((Math.abs(this.airRotation)+0.001)/(Math.PI*2));
+      // Account for a steep takeoff and sloped landing when counting completed
+      // upright revolutions. An inverted ceiling departure receives no correction.
+      const landingPitch=Math.atan2(Math.sin(angle),Math.cos(angle));
+      const rotation=this.airRotation+(Math.abs(this.takeoffPitch)<2.2?this.takeoffPitch-landingPitch:0);
+      const count=Math.floor((Math.abs(rotation)+0.05)/(Math.PI*2));
       if (!this.crashed && this.airborneTime>0.2 && count>0)
         this.pendingFlip={count,direction:this.airRotation>0?'BACKFLIP':'FRONTFLIP',age:0};
       this.airRotation=0; this.airborneTime=0;
@@ -233,7 +285,9 @@ export class Simulation {
     if(this.pendingFlip){
       this.pendingFlip.age+=STEP;
       if(this.crashed || this.pendingFlip.age>0.5)this.pendingFlip=undefined;
-      else if(this.grounded && this.pendingFlip.age>=0.1){
+      // A clean tire contact starts the grace window. Suspension rebound may
+      // lift both tires again; it must not discard a safely landed stunt.
+      else if(this.pendingFlip.age>=0.18){
         const {count,direction}=this.pendingFlip;this.flips+=count;this.onFlip?.(count,direction);this.pendingFlip=undefined;
       }
     }
@@ -266,8 +320,32 @@ export class Simulation {
     this.onCrash?.();
   }
 
+  private updateHazards(){
+    const p=this.bike.frame.translation();
+    this.level.hazards.forEach((h,i)=>{
+      const body=this.hazardBodies[i],phase=this.clock/(h.period??4)*Math.PI*2+(h.phase??0);
+      if(h.type==='wrecking'||h.type==='axe'){
+        const anchor=h.anchorY??h.y+6,length=anchor-h.y,angle=Math.sin(phase)*.95;
+        body.setNextKinematicTranslation({x:h.x+Math.sin(angle)*(h.amplitude??length),y:anchor-Math.cos(angle)*length});body.setNextKinematicRotation(-angle);
+      }
+      if(h.type==='crusher')body.setNextKinematicTranslation({x:h.x,y:h.y+(h.amplitude??3)*Math.cos(phase)});
+      if(h.type==='boulder'&&!this.hazardActivated.has(i)&&p.x>=(h.triggerX??h.x+10)){
+        this.hazardActivated.add(i);body.setBodyType(RAPIER.RigidBodyType.Dynamic,true);body.setLinvel({x:14,y:-3},true);body.setAngvel(-7,true);
+      }
+    });
+    for(const [i,left]of this.fuses){
+      if(left>STEP){this.fuses.set(i,left-STEP);continue;}
+      this.fuses.delete(i);this.exploded.add(i);this.hazardBodies[i].collider(0).setCollisionGroups(0);this.onExplosion?.(i);
+      const h=this.level.hazards[i];if(Math.hypot(p.x-h.x,p.y-h.y)<3.4)this.crash();
+    }
+  }
+
   resetHazards() {
     this.exploded.clear();
+    this.fuses.clear();this.hazardActivated.clear();this.clock=0;
+    this.level.hazards.forEach((h,i)=>{const body=this.hazardBodies[i];body.setBodyType(['wrecking','axe','crusher','boulder'].includes(h.type)?RAPIER.RigidBodyType.KinematicPositionBased:RAPIER.RigidBodyType.Fixed,true);body.setTranslation({x:h.x,y:h.y},true);body.setLinvel({x:0,y:0},true);body.setAngvel(0,true);body.collider(0).setCollisionGroups(h.type==='boulder'?0x00030003:GROUND);});
+    this.machines.reset();for(const rail of this.magneticRails)rail.colliders.forEach((c,i)=>c.setCollisionGroups(i?0:GROUND));
+    for(const loop of this.campaignLoops){loop.phase='approach';loop.colliders.forEach((c,i)=>c.setCollisionGroups(i?0:GROUND));}
   }
   restartRound() {
     this.flips=0;
