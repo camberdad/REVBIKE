@@ -1,9 +1,9 @@
 {
   "source": "User-supplied cgbike1.obj / cgbike1.fbx",
   "originalTriangles": 1373840,
-  "finalTriangles": 117861,
-  "skippedObjects": 21,
-  "drawCalls": 60,
-  "bytes": 2256348,
-  "note": "Materials recovered from matching FBX. Floor and micro-lettering removed. Meshes simplified, batched by material, reoriented and split into independently animated chassis and wheels."
+  "finalTriangles": 105603,
+  "skippedObjects": 30,
+  "drawCalls": 56,
+  "bytes": 2028668,
+  "note": "Materials recovered from matching FBX. Floor and micro-lettering removed. Static donor forks, swingarm, chain and shocks replaced by runtime articulated suspension. Meshes simplified, batched by material, reoriented and split into independently animated chassis and wheels."
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { type Simulation } from './physics';
+import { BIKE_DIMENSIONS, type Simulation } from './physics';
 import { sampleSegment, loopPoints, type Level, type Point } from './track';
 import { DEFAULT_SETTINGS, bloodParticleCount, type GameSettings } from './settings';
 
@@ -40,6 +40,9 @@ export class GameRenderer {
   rider=new THREE.Group();
   wheels=[new THREE.Group(),new THREE.Group()];
   suspension:THREE.Mesh[]=[];
+  private rearSwingarms:THREE.Mesh[]=[];
+  private rearSpring!:THREE.Mesh;
+  private forkSleeves:THREE.Mesh[]=[];
   hazardMeshes:THREE.Group[]=[];
   checkpointFlags:THREE.Group[]=[];
   scenery=new THREE.Group();
@@ -74,7 +77,7 @@ export class GameRenderer {
 
   private async loadBikeModel(){
     try{
-      const {scene}=await new GLTFLoader().loadAsync('./models/revbike.glb');
+      const {scene}=await new GLTFLoader().loadAsync('./models/revbike.glb?rig=2');
       const chassis=scene.getObjectByName('chassis'),rear=scene.getObjectByName('rearWheel'),front=scene.getObjectByName('frontWheel');
       if(!chassis||!rear||!front)throw new Error('The bike asset is missing an animated part.');
       // The procedural bike remains a complete fallback if an asset request fails.
@@ -90,7 +93,8 @@ export class GameRenderer {
         for(let i=0;i<24;i++){
           const a=i/24*Math.PI*2;
           for(const z of [-0.095,0.095]){
-            const tread=box(wheel,0.105,0.075,0.15,mats.tire,Math.cos(a)*0.427,Math.sin(a)*0.427,z);
+            const treadRadius=BIKE_DIMENSIONS.wheelRadius-0.075/2;
+            const tread=box(wheel,0.105,0.075,0.15,mats.tire,Math.cos(a)*treadRadius,Math.sin(a)*treadRadius,z);
             tread.rotation.z=a-Math.PI/2;
           }
         }
@@ -147,7 +151,7 @@ export class GameRenderer {
 
   private buildBike(){
     this.scene.add(this.bike,...this.wheels);this.bike.add(this.rider);
-    const frameNodes=[[-0.94,-0.35],[-0.35,0.25],[0.45,0.2],[0.94,-0.35],[-0.1,-0.32],[-0.94,-0.35]];
+    const frameNodes=[[-0.35,0.25],[0.45,0.2],[-0.1,-0.32],[-0.35,0.25]];
     for(let i=0;i<frameNodes.length-1;i++)rod(this.bike,[...frameNodes[i],0.15],[...frameNodes[i+1],0.15],0.075,mats.orange);
     rod(this.bike,[-0.35,0.25,0.15],[-0.1,-0.32,0.15],0.065,mats.orange);
     rod(this.bike,[-0.1,-0.32,0.15],[0.45,0.2,0.15],0.065,mats.orange);
@@ -162,8 +166,14 @@ export class GameRenderer {
     rod(this.bike,[0.53,0.71,-0.3],[0.53,0.71,0.3],0.045,mats.ink);
     box(this.bike,0.27,0.25,0.12,mats.white,0.7,0.48,0.27).rotation.z=-0.22;
     for(let i=0;i<2;i++)this.suspension.push(rod(this.scene,[0,0,0],[0,1,0],0.055,mats.metal));
+    for(const z of [-0.2,0.24]){
+      this.rearSwingarms.push(rod(this.scene,[0,0,z],[0,1,z],0.065,mats.ink));
+      this.forkSleeves.push(rod(this.scene,[0,0,z],[0,1,z],0.075,mats.metal));
+    }
+    class Coil extends THREE.Curve<THREE.Vector3>{constructor(){super();}getPoint(t:number){const a=t*Math.PI*2*9;return new THREE.Vector3(Math.cos(a)*0.085,t-0.5,Math.sin(a)*0.085);}}
+    this.rearSpring=mesh(new THREE.TubeGeometry(new Coil(),110,0.024,5,false),mats.orange,this.scene);
     for(const wheel of this.wheels){
-      const tire=mesh(new THREE.CylinderGeometry(0.44,0.44,0.3,24),mats.tire,wheel);tire.rotation.x=Math.PI/2;
+      const tire=mesh(new THREE.CylinderGeometry(BIKE_DIMENSIONS.wheelRadius,BIKE_DIMENSIONS.wheelRadius,0.3,24),mats.tire,wheel);tire.rotation.x=Math.PI/2;
       for(const z of [-0.16,0.16]){
         mesh(new THREE.TorusGeometry(0.34,0.035,6,24),mats.metal,wheel,0,0,z);
         for(let i=0;i<10;i++){
@@ -171,7 +181,7 @@ export class GameRenderer {
         }
       }
       for(let i=0;i<20;i++){
-        const a=i/20*Math.PI*2;const tread=box(wheel,0.11,0.07,0.34,mats.tire,Math.cos(a)*0.427,Math.sin(a)*0.427);tread.rotation.z=a-Math.PI/2;
+        const a=i/20*Math.PI*2,treadRadius=BIKE_DIMENSIONS.wheelRadius-0.07/2;const tread=box(wheel,0.11,0.07,0.34,mats.tire,Math.cos(a)*treadRadius,Math.sin(a)*treadRadius);tread.rotation.z=a-Math.PI/2;
       }
       const hub=mesh(new THREE.CylinderGeometry(0.09,0.09,0.4,12),mats.orange,wheel);hub.rotation.x=Math.PI/2;
     }
@@ -377,11 +387,27 @@ export class GameRenderer {
   render(sim:Simulation,dt:number,playing:boolean){
     const {frame,wheels}=sim.bike,p=frame.translation();
     this.bike.position.set(p.x,p.y,0);this.bike.rotation.z=frame.rotation();
+    const transform=(x:number,y:number,z:number)=>new THREE.Vector3(x,y,z).applyAxisAngle(new THREE.Vector3(0,0,1),frame.rotation()).add(new THREE.Vector3(p.x,p.y,0));
+    const connect=(obj:THREE.Mesh,start:THREE.Vector3,end:THREE.Vector3)=>{
+      const direction=end.clone().sub(start);obj.position.copy(start.clone().add(end).multiplyScalar(0.5));
+      obj.scale.y=direction.length();obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());
+    };
     wheels.forEach((wheel,i)=>{
       const wp=wheel.translation();this.wheels[i].position.set(wp.x,wp.y,0);this.wheels[i].rotation.z=wheel.rotation();
-      const anchor=new THREE.Vector3(i===0?-0.35:0.53,i===0?0.22:0.68,0.19).applyAxisAngle(new THREE.Vector3(0,0,1),frame.rotation()).add(new THREE.Vector3(p.x,p.y,0));
-      const end=new THREE.Vector3(wp.x,wp.y,0.19),diff=end.clone().sub(anchor),obj=this.suspension[i];
-      obj.position.copy(anchor.add(end).multiplyScalar(0.5));obj.scale.y=diff.length();obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),diff.normalize());
+      const axle=new THREE.Vector3(wp.x,wp.y,0.24);
+      if(i===0){
+        const pivot=transform(-0.18,-0.2,0.24),upper=transform(-0.43,0.29,0.28);
+        const lower=pivot.clone().lerp(axle,0.6);lower.z=0.28;
+        connect(this.suspension[0],upper,lower);connect(this.rearSpring,upper,lower);
+        this.rearSwingarms.forEach((arm,j)=>{const z=j===0?-0.2:0.24;const start=pivot.clone();start.z=z;const end=axle.clone();end.z=z;connect(arm,start,end);});
+      }else{
+        const top=transform(0.53,0.68,0.24);
+        connect(this.suspension[1],top,axle);
+        this.forkSleeves.forEach((sleeve,j)=>{
+          const start=top.clone(),end=top.clone().add(axle.clone().sub(top).normalize().multiplyScalar(0.55));
+          start.z=end.z=j===0?-0.2:0.24;connect(sleeve,start,end);
+        });
+      }
     });
     this.syncRagdoll(sim);
     this.hazardMeshes.forEach((group,i)=>{

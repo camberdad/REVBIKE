@@ -11,7 +11,7 @@ export interface Level {
 export const level1 = data as Level;
 export const testLevel: Level = {
   name: 'Suspension test', subtitle: 'FLAT GROUND + ONE RAMP', length: 60, stars: [10,20,30],
-  spawn: [2,1.15], segments: [{ points: [[-10,0],[18,0],[24,3],[30,3],[38,0],[70,0]], smooth: false }],
+  spawn: [2,1.55], segments: [{ points: [[-10,0],[18,0],[24,3],[30,3],[38,0],[70,0]], smooth: false }],
   hazards: [], checkpoints: [], finish: [60,0],
 };
 

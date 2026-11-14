@@ -72,11 +72,13 @@ Head contact with track geometry crashes immediately. TNT, saws, spikes, and fal
 
 The loop has a crossing at its base. Its incoming and outgoing collision lanes are gated by traversal phase, allowing a strictly 2D bike to pass beneath the exit lane and then follow the full loop. Both lanes are visible throughout.
 
-Handling settings are grouped in `TUNING` in `src/physics.ts`: gravity, rear torque, lean torque, wheel speed limit, spring stiffness/damping, and friction.
+Handling settings are grouped in `TUNING` and `BIKE_DIMENSIONS` in `src/physics.ts`: gravity, ground/air torque, a soft spin limit, axle positions and travel, force-based spring stiffness, compression/rebound damping, and friction. The raised chassis settles around 1.11 m with 0.66 m of suspension travel. Sliding forks, a moving swingarm, and a compressible coil follow the real axle bodies.
+
+For live suspension compression, axle droop, tire clearance, and angular velocity, press **F3**, use **Gameplay settings → Show rig debug**, or add `?debug=1` to the URL. `?debug=log` adds console reports twice per second. See [the reference inspection, tuning values, measurements, and verification steps](docs/suspension-tuning.md).
 
 ## Supplied bike model
 
-The game uses the user-supplied `cgbike1.obj` geometry and material colors recovered from `cgbike1.fbx`. The original authoring floor, minute lettering, and stray hardware were removed. Geometry was simplified and batched, converted into the gameplay coordinate system, and separated into chassis/front wheel/rear wheel groups. The resulting `public/models/revbike.glb` is approximately **2.26 MB / 117,861 triangles**, reduced from 1,373,840 source triangles. Orange plastics, raised fenders, a race plate, and off-road tread complete the dirt conversion.
+The game uses the user-supplied `cgbike1.obj` geometry and material colors recovered from `cgbike1.fbx`. The original authoring floor, minute lettering, and stray hardware were removed. Geometry was simplified and batched, converted into the gameplay coordinate system, and separated into chassis/front wheel/rear wheel groups. Static donor running gear was replaced by articulated runtime suspension. The resulting `public/models/revbike.glb` is approximately **2.03 MB / 105,603 triangles**, reduced from 1,373,840 source triangles. Orange plastics, raised fenders, a race plate, and off-road tread complete the dirt conversion.
 
 The original 104 MB OBJ and 33 MB FBX stay in the user's Downloads folder and are not required to run or build the game. `public/models/provenance.json` records the conversion. To regenerate from the original files:
 

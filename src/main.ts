@@ -1,5 +1,5 @@
 import './style.css';
-import { RAPIER, Simulation, STEP, type Controls } from './physics';
+import { RAPIER, Simulation, STEP, TUNING, BIKE_DIMENSIONS, type Controls } from './physics';
 import { GameRenderer } from './render';
 import { level1, testLevel } from './track';
 import { BikeAudio } from './audio';
@@ -20,6 +20,8 @@ const icon=(name:string)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const star='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9Z"/></svg>';
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
 const params=new URLSearchParams(location.search);
+let debugEnabled=['1','log'].includes(params.get('debug')??'');
+const logRig=params.get('debug')==='log';
 if(params.get('embed')==='1')document.documentElement.classList.add('embed-mode');
 const level=params.get('course')==='test'?testLevel:level1;
 const logo='<span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i></span>REVBIKE<span class="brand-dot" aria-hidden="true">®</span>';
@@ -42,6 +44,16 @@ $('app').innerHTML=`
         <div class="stage-vignette"></div>
         <div class="stage-top"><span class="location-label"><span class="live-dot"></span> REDROCK COUNTY, NV</span><div class="progress-wrap"><span>START</span><div class="progress-track"><div id="progress-fill"></div>${level.checkpoints.map(p=>`<i style="left:${p[0]/level.length*100}%"></i>`).join('')}<b id="progress-bike"></b></div><span>${icon('flag')}</span></div><span class="best-label">PERSONAL BEST <b id="best">${best?formatTime(best):'— —'}</b></span></div>
         <div id="toast" class="toast" role="status"></div>
+        <aside id="rig-debug" class="rig-debug hidden" aria-label="Suspension and angular velocity diagnostics">
+          <div class="rig-debug-heading">REVBIKE / RIG DEBUG <span>F3 TO HIDE</span></div>
+          <div class="rig-debug-state" id="debug-contact"></div>
+          <div class="rig-debug-row"><b>REAR COMPRESSION</b><span id="debug-rear"></span></div><div class="rig-debug-bar"><i id="debug-rear-bar"></i></div>
+          <div class="rig-debug-row"><b>FRONT COMPRESSION</b><span id="debug-front"></span></div><div class="rig-debug-bar"><i id="debug-front-bar"></i></div>
+          <div class="rig-debug-row"><b>AXLE DROP R / F</b><span id="debug-drop"></span></div>
+          <div class="rig-debug-row"><b>TIRE GAP R / F</b><span id="debug-clearance"></span></div>
+          <div class="rig-debug-row"><b>ANGULAR VELOCITY</b><span id="debug-angular"></span></div>
+          <small>Compression measured from full droop. Distances in world meters. P pauses the readout.</small>
+        </aside>
         <div id="intro" class="intro">
           <span class="intro-kicker"><span></span> YOUR NEXT BAD IDEA STARTS HERE.</span>
           <h2 class="intro-logo" aria-label="REVBIKE"><span class="wordmark">${logo}</span></h2>
@@ -66,7 +78,7 @@ $('app').innerHTML=`
           <label class="setting-field" for="setting-quality"><span>VISUAL QUALITY</span><select id="setting-quality"><option value="low">Low — lighter graphics</option><option value="medium">Medium — balanced</option><option value="high">High — full detail</option></select><small>Adjust resolution and directional shadows.</small></label>
           <label class="setting-field" for="setting-blood"><span>BLOOD AMOUNT</span><select id="setting-blood"><option value="off">Off</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select><small>Stylized red particles on rider crashes.</small></label>
           <label class="setting-field shake-field" for="setting-shake"><span>SCREEN SHAKE</span><span class="setting-toggle"><input id="setting-shake" type="checkbox"><span>Crash & explosion shake</span></span><small>Turn off for a steadier camera.</small></label>
-        </div><div class="settings-footnote"><span id="settings-saved" role="status">Preferences save automatically on this browser.</span><button id="reset-settings" class="text-button">RESTORE DEFAULTS</button></div>
+        </div><div class="settings-footnote"><span id="settings-saved" role="status">Preferences save automatically on this browser.</span><div class="settings-utilities"><button id="toggle-rig-debug" class="text-button" aria-pressed="false">SHOW RIG DEBUG</button><button id="reset-settings" class="text-button">RESTORE DEFAULTS</button></div></div>
       </section>
     </section>
     <footer><span>GOOD RUNS ARE EARNED. GREAT RUNS ARE SENT.</span><span>REVBIKE <b>/</b> 01 — REDROCK RIDGE</span></footer>
@@ -135,6 +147,25 @@ function saveSettings(){
   try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));$('settings-saved').textContent='Preferences saved on this browser.';}
   catch{$('settings-saved').textContent='Preferences applied for this visit.';}
 }
+function syncRigDebug(){
+  $('rig-debug').classList.toggle('hidden',!debugEnabled);
+  $('toggle-rig-debug').textContent=debugEnabled?'HIDE RIG DEBUG':'SHOW RIG DEBUG';
+  $('toggle-rig-debug').setAttribute('aria-pressed',String(debugEnabled));
+  if(sim)updateRigDebug();
+}
+function updateRigDebug(){
+  if(!debugEnabled)return;
+  const [rear,front]=sim.getSuspensionTelemetry(),omega=sim.bike.frame.angvel();
+  $('debug-contact').textContent=`${sim.crashed?'CRASHED':sim.grounded?'WHEEL CONTACT':'AIRBORNE'} / ${(omega*180/Math.PI).toFixed(1)}°/s`;
+  for(const data of [rear,front]){
+    $(`debug-${data.wheel}`).textContent=`${data.compression.toFixed(3)} / ${data.travel.toFixed(2)} m`;
+    $(`debug-${data.wheel}-bar`).style.width=`${data.compressionRatio*100}%`;
+    $(`debug-${data.wheel}-bar`).classList.toggle('at-stop',data.compressionRatio>0.95);
+  }
+  $('debug-drop').textContent=`${rear.axleDrop.toFixed(3)} / ${front.axleDrop.toFixed(3)} m`;
+  $('debug-clearance').textContent=`${rear.tireClearance.toFixed(3)} / ${front.tireClearance.toFixed(3)} m`;
+  $('debug-angular').textContent=`${omega.toFixed(3)} rad/s`;
+}
 function finish(){
   if(state!=='playing')return;state='finished';clearControls();
   const time=Math.max(0,elapsed-bonus),stars=level.stars.filter(t=>time<t).length;
@@ -144,6 +175,7 @@ function finish(){
   modal('REDROCK RIDGE / RUN COMPLETE',stars===3?'ABSOLUTELY SENT.':'DUST SETTLED.',`<div class="result-stars">${[0,1,2].map(i=>`<span class="${i<stars?'earned':''}">${star}</span>`).join('')}</div><div class="result-time">${formatTime(time)}</div><div class="result-stats"><span>FLIP BONUS<b>−${bonus.toFixed(1)}s</b></span><span>CLEAN FLIPS<b>${activeFlips}</b></span><span>PROGRESS<b>100%</b></span></div><p>${stars===3?'Three stars. One very good bad idea.':`Chase ${stars===2?'three':'more'} stars. Next target: under ${level.stars[Math.max(0,2-stars)]} seconds.`}</p>`,'RUN IT BACK',restart,'TAKE IN THE VIEW',()=>hideModal());
 }
 function updateHUD(){
+  updateRigDebug();
   const score=Math.max(0,elapsed-bonus),time=formatTime(score),parts=time.split('.');
   $('timer').innerHTML=`${parts[0]}<span>.${parts[1]}</span>`;
   const stars=level.stars.filter(t=>score<t).length;
@@ -172,12 +204,15 @@ for(const id of ['setting-framerate','setting-quality','setting-blood','setting-
   settings=normalizeSettings({frameRate:Number($<HTMLSelectElement>('setting-framerate').value),quality:$<HTMLSelectElement>('setting-quality').value,blood:$<HTMLSelectElement>('setting-blood').value,screenShake:$<HTMLInputElement>('setting-shake').checked});saveSettings();
 };
 $('reset-settings').onclick=()=>{settings={...DEFAULT_SETTINGS};saveSettings();};
+$('toggle-rig-debug').onclick=()=>{debugEnabled=!debugEnabled;syncRigDebug();};
+syncRigDebug();
 $('modal-primary').onclick=()=>modalPrimary();$('modal-secondary').onclick=()=>modalSecondary();
 $('sound').onclick=()=>{audio.setEnabled(!audio.enabled);$('sound').innerHTML=icon(audio.enabled?'sound':'mute');$('sound').setAttribute('aria-label',audio.enabled?'Mute sound':'Enable sound');$('sound').title=audio.enabled?'Mute sound':'Enable sound';};
 $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.querySelector('.game-shell')!.requestFullscreen();}catch{toast('FULLSCREEN IS UNAVAILABLE IN THIS BROWSER');}};
 const keymap:Record<string,keyof Controls>={w:'gas',arrowup:'gas',s:'brake',arrowdown:'brake',a:'left',arrowleft:'left',d:'right',arrowright:'right'};
 window.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.key==='F3'){e.preventDefault();if(!e.repeat){debugEnabled=!debugEnabled;syncRigDebug();}return;}
   if(e.target instanceof HTMLElement && e.target.closest('select,input,textarea,[role="tab"]') && e.key.toLowerCase()!=='r')return;
   const key=e.key.toLowerCase();
   if(keymap[key]||['r','p','escape','enter',' '].includes(key))e.preventDefault();
@@ -219,7 +254,7 @@ async function boot(){
     // Settle the suspension before presenting the opening scene.
     for(let i=0;i<100;i++)sim.step(controls);
     $('loading').classList.add('hidden');updateHUD();
-    let last=performance.now(),accumulator=0,hudClock=0;
+    let last=performance.now(),accumulator=0,hudClock=0,debugClock=0;
     const loop=(now:number)=>{
       const dt=Math.min((now-last)/1000,0.05);last=now;
       if(state==='playing'||state==='crashed'){
@@ -241,13 +276,16 @@ async function boot(){
           modal('GRAVITY WINS THIS ROUND.','SHAKE OFF THE DUST.','<p>A fresh round is one key away.<br>Hit <kbd>R</kbd> to restart at the beginning with a clean clock.</p>','RESTART ROUND',restart,'TAKE A BREATHER',()=>{state='paused';previousState='crashed';panelPaused=true;$('resume-panel').classList.remove('hidden');hideModal();});
       }
       hudClock+=dt;if(hudClock>0.05){updateHUD();hudClock=0;}
+      if(debugEnabled&&logRig&&(state==='playing'||state==='crashed')){
+        debugClock+=dt;if(debugClock>=0.5){debugClock=0;console.info('[REVBIKE rig]',{angularVelocity:sim.bike.frame.angvel(),suspension:sim.getSuspensionTelemetry()});}
+      }
       audio.update(sim.bike.wheels[0].angvel(),controls.gas,state==='playing');
       const renderDt=frameLimiter.tick(now);
       if(renderDt!==null){view.render(sim,renderDt,state==='playing'||state==='crashed');$('game').dataset.renderFrames=String(++renderFrames);}
       requestAnimationFrame(loop);
     };requestAnimationFrame(loop);
     // Read-only diagnostics make fixed-step physics and browser failures inspectable.
-    Object.defineProperty(window,'revbike',{value:{get state(){return state;},get diagnostics(){return {position:{...sim.bike.frame.translation()},velocity:{...sim.bike.frame.linvel()},angle:sim.bike.frame.rotation(),grounded:sim.grounded,crashed:sim.crashed,steps,elapsed,bonus,checkpoint,flips:activeFlips,rigidBodies:sim.world.bodies.len(),renderer:view.renderer.info.render};}},writable:false});
+    Object.defineProperty(window,'revbike',{value:{get state(){return state;},get diagnostics(){return {position:{...sim.bike.frame.translation()},velocity:{...sim.bike.frame.linvel()},angle:sim.bike.frame.rotation(),angularVelocity:sim.bike.frame.angvel(),suspension:sim.getSuspensionTelemetry(),tuning:{...TUNING},dimensions:{...BIKE_DIMENSIONS},grounded:sim.grounded,crashed:sim.crashed,steps,elapsed,bonus,checkpoint,flips:activeFlips,rigidBodies:sim.world.bodies.len(),renderer:view.renderer.info.render};}},writable:false});
   }catch(error){console.error(error);$('loading-status').textContent='The engine couldn’t start. Reload to try again. WebGL is required.';$('loading-status').classList.add('load-error');}
 }
 void boot();

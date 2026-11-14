@@ -19,6 +19,10 @@ const transform=new Matrix4().set(0,0,scale,-mid*scale, 0,scale,0,0.878337*scale
 const sourceMats=JSON.parse(fs.readFileSync('artifacts/model-materials.json','utf8'));
 const cache=new Map(),batches=new Map();
 let originalTriangles=0,finalTriangles=0,skipped=0;
+// These rigid donor parts would float at the old axle height. Runtime sliding
+// forks, a pivoting swingarm and a compressible coil replace them.
+const articulatedReplacements=new Set(['Cylinder.061_Cylinder.029','chain_Circle.005','Cube.021_Cube.019','Cylinder.063_Cylinder.086',
+  'Circle','Cylinder.040_Cylinder','Cylinder.039_Cylinder.033','Cylinder.038_Cylinder.027','Cylinder.037_Cylinder.001']);
 function matFor(name,objectName){
   let color=sourceMats[name]?.color??'9ba69e';
   // Match the game's orange plastics and expose the donor bike's engine detail.
@@ -38,7 +42,7 @@ input.traverse(obj=>{
   const bounds=new Box3().setFromObject(obj),size=bounds.getSize(new Vector3()),center=bounds.getCenter(new Vector3());
   originalTriangles+=obj.geometry.attributes.position.count/3;
   // The authoring scene includes a huge floor, minute lettering and stray hardware.
-  if(obj.name.startsWith('Plane')||obj.name.startsWith('Text')||Math.abs(center.x)>2||size.length()<0.055){skipped++;return;}
+  if(obj.name.startsWith('Plane')||obj.name.startsWith('Text')||Math.abs(center.x)>2||size.length()<0.055||articulatedReplacements.has(obj.name)){skipped++;return;}
   let part='chassis';
   if(bounds.max.y<1.1 && center.z>2.25 && bounds.min.z>1.05)part='frontWheel';
   else if(bounds.max.y<1.1 && center.z< -3.65 && bounds.max.z< -2.5)part='rearWheel';
@@ -87,5 +91,5 @@ globalThis.FileReader=class{
 const glb=await new GLTFExporter().parseAsync(root,{binary:true});
 fs.mkdirSync('public/models',{recursive:true});fs.writeFileSync('public/models/revbike.glb',Buffer.from(glb));
 const report={source:'User-supplied cgbike1.obj / cgbike1.fbx',originalTriangles,finalTriangles,skippedObjects:skipped,drawCalls:batches.size,bytes:glb.byteLength,
-  note:'Materials recovered from matching FBX. Floor and micro-lettering removed. Meshes simplified, batched by material, reoriented and split into independently animated chassis and wheels.'};
+  note:'Materials recovered from matching FBX. Floor and micro-lettering removed. Static donor forks, swingarm, chain and shocks replaced by runtime articulated suspension. Meshes simplified, batched by material, reoriented and split into independently animated chassis and wheels.'};
 fs.writeFileSync('public/models/provenance.json',JSON.stringify(report,null,2));console.log(report);
